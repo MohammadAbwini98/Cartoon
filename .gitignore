@@ -1,0 +1,21 @@
+# media never goes into git: source episode, transfers, renders, models
+media/
+*.mp4
+*.mov
+*.mkv
+*.wav
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+# local state and secrets
+.env
+.env.*
+!.env.example
+secrets/
+state/
+__pycache__/
+*.pyc
+.venv/
+node_modules/

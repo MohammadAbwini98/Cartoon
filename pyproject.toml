@@ -1,0 +1,12 @@
+[project]
+name = "remake-studio"
+version = "0.2.0"
+description = "Animation Remake Studio: cloud pipeline that rebuilds an animated episode's visuals while keeping its timing and soundtrack"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.26"]
+
+[project.scripts]
+remake = "remake_studio.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["remake_studio*"]
