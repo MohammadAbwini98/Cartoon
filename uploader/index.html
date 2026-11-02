@@ -1,0 +1,421 @@
+<title>Remake Studio Transfer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap">
+<style>
+/* Layout: one working column, like an exposure sheet: header, the file being sent, its chunk sheet, then every transfer on record. */
+:root {
+  --paper: #f4f6f2;      /* animation paper */
+  --sheet: #ffffff;
+  --ink: #1a1e22;
+  --muted: #5b646b;
+  --rule: #d4d9d1;
+  --blue: #2a56c6;       /* blue timing pencil: the accent */
+  --blue-soft: #e3eafb;
+  --red: #c33a2c;        /* red pencil: problems */
+  --red-soft: #f9e4e1;
+  --green: #2c7a4b;
+  --green-soft: #e0f1e6;
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans Arabic", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #121518; --sheet: #191d21; --ink: #e6e9e3; --muted: #9aa3a9; --rule: #2b3238;
+    --blue: #86a6ff; --blue-soft: #1f2a44; --red: #ff8a7d; --red-soft: #3a211e;
+    --green: #74cf98; --green-soft: #1c3226; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #121518; --sheet: #191d21; --ink: #e6e9e3; --muted: #9aa3a9; --rule: #2b3238;
+  --blue: #86a6ff; --blue-soft: #1f2a44; --red: #ff8a7d; --red-soft: #3a211e;
+  --green: #74cf98; --green-soft: #1c3226; color-scheme: dark;
+}
+body { background: var(--paper); color: var(--ink); font: 15px/1.55 var(--font-body); }
+.wrap { max-width: 880px; margin: 0 auto; padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 22px; }
+h1, h2 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+h1 { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 1.05rem; font-weight: 600; }
+p { margin: 0; }
+.lede { color: var(--muted); max-width: 62ch; }
+.label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.panel { background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.status { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font-size: 0.8rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--rule); color: var(--muted); }
+.chip.ok { color: var(--green); background: var(--green-soft); border-color: transparent; }
+.chip.bad { color: var(--red); background: var(--red-soft); border-color: transparent; }
+.meter { height: 6px; background: var(--rule); border-radius: 3px; overflow: hidden; }
+.meter > span { display: block; height: 100%; background: var(--blue); width: 0; transition: width .3s; }
+.drop { border: 1.5px dashed var(--rule); border-radius: 6px; padding: 22px; display: grid; gap: 10px; justify-items: start; }
+.drop.over { border-color: var(--blue); background: var(--blue-soft); }
+label.pick { display: inline-flex; }
+input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+button, label.pick span { font: 600 0.92rem var(--font-body); border-radius: 5px; padding: 8px 16px; cursor: pointer;
+  border: 1px solid var(--blue); background: var(--blue); color: var(--sheet); }
+button.ghost, label.pick span { background: transparent; color: var(--blue); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+button:focus-visible, select:focus-visible, label.pick:focus-within span { outline: 2px solid var(--blue); outline-offset: 2px; }
+select { font: inherit; padding: 6px 8px; border-radius: 5px; border: 1px solid var(--rule); background: var(--sheet); color: var(--ink); }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 18px; }
+.facts div { display: grid; gap: 2px; min-width: 0; }
+.facts .v { overflow-wrap: anywhere; }
+.fname { font-weight: 600; font-size: 1.05rem; overflow-wrap: anywhere; }
+.sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 3px; }
+.sheet i { display: block; aspect-ratio: 1; border: 1px solid var(--rule); border-radius: 2px; font: 500 0.62rem var(--font-mono);
+  color: var(--muted); display: grid; place-items: center; font-style: normal; background: var(--paper); }
+.sheet i.hash { border-color: var(--blue); }
+.sheet i.up { background: var(--blue-soft); border-color: var(--blue); color: var(--blue); }
+.sheet i.done { background: var(--blue); border-color: var(--blue); color: var(--sheet); }
+.sheet i.skip { background: var(--green-soft); border-color: var(--green); color: var(--green); }
+.sheet i.err { background: var(--red-soft); border-color: var(--red); color: var(--red); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.8rem; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; border: 1px solid var(--rule); }
+.legend .l-done::before { background: var(--blue); border-color: var(--blue); }
+.legend .l-skip::before { background: var(--green-soft); border-color: var(--green); }
+.legend .l-up::before { background: var(--blue-soft); border-color: var(--blue); }
+.legend .l-err::before { background: var(--red-soft); border-color: var(--red); }
+.msg { padding: 10px 12px; border-radius: 5px; font-size: 0.92rem; }
+.msg.err { background: var(--red-soft); color: var(--red); }
+.msg.ok { background: var(--green-soft); color: var(--green); }
+.msg.info { background: var(--blue-soft); color: var(--blue); }
+.verify { display: grid; gap: 8px; }
+.cmd { display: flex; gap: 8px; align-items: stretch; min-width: 0; }
+.cmd code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; padding: 8px 10px; border-radius: 5px;
+  background: var(--paper); border: 1px solid var(--rule); font: 0.82rem var(--font-mono); }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: .07em; }
+th, td { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+td.name { min-width: 14ch; max-width: 260px; overflow-wrap: anywhere; }
+.pill { font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.complete { background: var(--green-soft); color: var(--green); }
+.pill.uploading, .pill.paused { background: var(--blue-soft); color: var(--blue); }
+.pill.failed { background: var(--red-soft); color: var(--red); }
+details summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
+#log { font: 0.78rem/1.5 var(--font-mono); max-height: 220px; overflow: auto; margin: 8px 0 0; white-space: pre-wrap; color: var(--muted); }
+.empty { color: var(--muted); font-size: 0.9rem; }
+@media (prefers-reduced-motion: reduce) { .meter > span { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:8px">
+    <span class="label">Animation Remake Studio · private workspace</span>
+    <h1>Send files to the studio</h1>
+    <p class="lede">Upload the episode MP4 and the studio project archive to the cloud workspace. Files go up in 16 MB pieces, each checked with SHA-256. If the upload stops, choose the same file again to continue where it left off.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="h-store">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="h-store">Workspace storage</h2>
+      <div class="status" id="caps"><span class="chip">Connecting…</span></div>
+    </div>
+    <div class="meter" aria-hidden="true"><span id="storeBar"></span></div>
+    <p class="num" id="storeText" style="font-size:.88rem;color:var(--muted)">Checking storage…</p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-file">
+    <h2 id="h-file">File</h2>
+    <div class="drop" id="drop">
+      <p>Drop a file here, or choose one.</p>
+      <div class="row">
+        <label class="pick" for="file"><span>Choose file</span><input type="file" id="file"></label>
+        <label for="role" class="label" style="margin-left:4px">Kind</label>
+        <select id="role">
+          <option value="episode">Episode video</option>
+          <option value="studio-archive">Studio project archive</option>
+          <option value="reference">Reference material</option>
+        </select>
+      </div>
+    </div>
+    <div id="fileInfo" hidden>
+      <div class="facts">
+        <div style="grid-column:1/-1"><span class="label">Name</span><span class="fname" id="fName" dir="auto"></span></div>
+        <div><span class="label">Size</span><span class="v num" id="fSize"></span></div>
+        <div><span class="label">Pieces</span><span class="v num" id="fChunks"></span></div>
+        <div><span class="label">Already in the workspace</span><span class="v num" id="fResume"></span></div>
+        <div><span class="label">Transfer id</span><span class="v mono" id="fTid" style="font-size:.8rem"></span></div>
+      </div>
+    </div>
+    <div class="row">
+      <button id="start" disabled>Start upload</button>
+      <button id="pause" class="ghost" disabled>Pause</button>
+    </div>
+    <div id="msg" class="msg" hidden role="status" aria-live="polite"></div>
+  </section>
+
+  <section class="panel" id="progressPanel" aria-labelledby="h-prog" hidden>
+    <div class="row" style="justify-content:space-between">
+      <h2 id="h-prog">Pieces</h2>
+      <span class="num" id="progText" style="font-size:.88rem;color:var(--muted)"></span>
+    </div>
+    <div class="meter" aria-hidden="true"><span id="progBar"></span></div>
+    <div class="sheet" id="sheet" aria-label="Upload pieces"></div>
+    <div class="legend"><span class="l-done">uploaded</span><span class="l-skip">already uploaded, checked</span><span class="l-up">uploading</span><span class="l-err">problem</span></div>
+    <div class="verify" id="verify" hidden>
+      <p><strong>SHA-256 of the whole file</strong>, computed in this browser while uploading:</p>
+      <div class="cmd"><code id="shaOut"></code><button class="ghost" id="copySha">Copy</button></div>
+      <p style="color:var(--muted);font-size:.9rem">Optional check on your Mac: run this in Terminal from the folder that holds the file. The two values should be identical.</p>
+      <div class="cmd"><code id="macCmd" dir="ltr"></code><button class="ghost" id="copyCmd">Copy</button></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-list">
+    <h2 id="h-list">Transfers on record</h2>
+    <div class="table-wrap" id="listWrap"><p class="empty">Nothing uploaded yet. Files you send appear here with their checksums, and the studio picks them up from this list.</p></div>
+  </section>
+
+  <details class="panel"><summary>Activity log</summary><pre id="log"></pre></details>
+</div>
+
+<script src="transfer-core.js"></script>
+<script>
+(() => {
+  "use strict";
+  const C = window.TransferCore;
+  const $ = (id) => document.getElementById(id);
+  const MiB = 1048576;
+  const fmt = (b) => b >= 1073741824 ? (b / 1073741824).toFixed(2) + " GB" : b >= MiB ? (b / MiB).toFixed(1) + " MB" : b >= 1024 ? (b / 1024).toFixed(0) + " KB" : b + " B";
+  const hexOf = (buf) => Array.from(new Uint8Array(buf), (x) => x.toString(16).padStart(2, "0")).join("");
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const log = (s) => { const el = $("log"); el.textContent += `${new Date().toLocaleTimeString()}  ${s}\n`; el.scrollTop = el.scrollHeight; };
+  const say = (text, kind = "info") => { const m = $("msg"); m.hidden = !text; m.className = "msg " + kind; m.textContent = text || ""; };
+
+  let assets = null, db = null, usage = null;
+  let file = null, tid = null, mode = "bin", plan = [], record = null, existing = new Map();
+  let running = false, pauseWanted = false, wake = null;
+
+  const ERR = {
+    too_large: "A piece was larger than the 20 MB limit. This is a bug in the uploader; nothing was stored for that piece.",
+    quota_or_state: "The workspace storage is full or not accepting uploads. Remove an older transfer or ask Claude to free space, then resume.",
+    upstream_auth: "Your sign-in expired. Reload the page, sign in, and choose the same file to resume.",
+    capability_disabled: "Uploads are switched off in this view. Open the page on claude.ai in a browser.",
+    not_granted: "This view was not given upload access. Open the page on claude.ai while signed in as its owner.",
+  };
+
+  // ---------- capabilities
+  async function init() {
+    const caps = $("caps");
+    if (!window.claude || !window.claude.use) {
+      caps.innerHTML = '<span class="chip bad">Open this page on claude.ai to upload</span>';
+      $("storeText").textContent = "Storage is available only inside claude.ai.";
+      return;
+    }
+    [assets, db] = await Promise.all([window.claude.use("assets"), window.claude.use("db")]);
+    caps.innerHTML = "";
+    const chip = (ok, okText, badText) => { const s = document.createElement("span"); s.className = "chip " + (ok ? "ok" : "bad"); s.textContent = ok ? okText : badText; caps.append(s); };
+    chip(!!assets, "Uploads ready", "Uploads unavailable");
+    chip(!!db, "Resume records ready", "Resume records unavailable");
+    if (!assets) { $("storeText").textContent = "Only the owner or an editor of this page can upload."; return; }
+    await refreshUsage();
+    if (db) watchTransfers();
+  }
+
+  async function refreshUsage() {
+    try {
+      const r = await assets.list();
+      usage = r.usage;
+      const pct = usage.maxBytes ? Math.min(100, (usage.bytes / usage.maxBytes) * 100) : 0;
+      $("storeBar").style.width = pct.toFixed(1) + "%";
+      $("storeText").textContent = `${fmt(usage.bytes)} of ${fmt(usage.maxBytes)} used · ${usage.files} of ${usage.maxFiles} stored pieces`;
+    } catch (e) {
+      $("storeText").textContent = `Could not read storage use (${e && e.code || "error"}).`;
+    }
+  }
+
+  // ---------- transfers list (db)
+  function watchTransfers() {
+    db.collection("transfers").onSnapshot((snap) => {
+      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => String(b.startedAt || "").localeCompare(String(a.startedAt || "")));
+      if (!rows.length) return;
+      const t = document.createElement("table");
+      t.innerHTML = "<thead><tr><th>File</th><th>Kind</th><th>Size</th><th>Pieces</th><th>Status</th><th>SHA-256</th></tr></thead>";
+      const tb = document.createElement("tbody");
+      for (const r of rows) {
+        const tr = document.createElement("tr");
+        const cells = [r.name, r.role, fmt(r.size || 0), `${r.done || 0} / ${r.total || "?"}`, null, r.sha256 ? r.sha256.slice(0, 16) + "…" : "—"];
+        cells.forEach((v, i) => {
+          const td = document.createElement("td");
+          if (i === 0) { td.className = "name"; td.dir = "auto"; }
+          if (i === 2 || i === 3) td.className = "num";
+          if (i === 5) td.className = "mono";
+          if (i === 4) { const p = document.createElement("span"); p.className = "pill " + (r.status || ""); p.textContent = r.status || "?"; td.append(p); }
+          else td.textContent = v ?? "";
+          tr.append(td);
+        });
+        tb.append(tr);
+      }
+      t.append(tb);
+      $("listWrap").replaceChildren(t);
+    }, (err) => log(`transfer list unavailable: ${err.code}`));
+  }
+
+  // ---------- file selection
+  async function choose(f) {
+    if (running) return;
+    file = f; say("");
+    $("fileInfo").hidden = false;
+    $("fName").textContent = f.name; $("fSize").textContent = fmt(f.size);
+    if (/\.(zip|tar|tgz|gz|7z)$/i.test(f.name)) $("role").value = "studio-archive";
+    else if (/\.(mp4|mov|mkv|m4v|webm)$/i.test(f.name)) $("role").value = "episode";
+    const first = await crypto.subtle.digest("SHA-256", await f.slice(0, MiB).arrayBuffer());
+    tid = C.transferId(hexOf(first), f.size);
+    $("fTid").textContent = tid;
+    record = null; existing = new Map(); mode = "bin";
+    if (db) {
+      try {
+        const snap = await db.doc(`transfers/${tid}`).get();
+        if (snap.exists) { record = snap.data(); mode = record.mode || "bin"; }
+        if (record) {
+          const cs = await db.collection(`transfers/${tid}/chunks`).get();
+          for (const d of cs.docs) { const c = d.data(); if (c && c.mode === mode) existing.set(c.index, c); }
+        }
+      } catch (e) { log(`could not read resume records: ${e.code || e}`); }
+    }
+    plan = C.planChunks(f.size, mode);
+    $("fChunks").textContent = `${plan.length} × ${fmt(C.CHUNK_BYTES[mode])}`;
+    $("fResume").textContent = record ? (record.status === "complete" ? "Complete" : `${existing.size} of ${plan.length} pieces`) : "None";
+    drawSheet();
+    $("start").textContent = record && record.status !== "complete" && existing.size ? "Resume upload" : "Start upload";
+    $("start").disabled = !assets;
+    if (record && record.status === "complete") say("This file is already in the workspace. Starting again re-checks every piece and uploads nothing that matches.", "ok");
+    if (usage && usage.maxBytes) {
+      const need = f.size * (mode === "b64" ? 4 / 3 : 1) - [...existing.values()].reduce((s, c) => s + (c.storedBytes || 0), 0);
+      if (usage.bytes + need > usage.maxBytes) say(`This file needs about ${fmt(need)} more storage, but only ${fmt(usage.maxBytes - usage.bytes)} is free. Free space first, or ask Claude to split the transfer across workspaces.`, "err");
+    }
+  }
+
+  function drawSheet() {
+    const s = $("sheet"); s.replaceChildren();
+    for (const c of plan) { const i = document.createElement("i"); i.textContent = c.index + 1; i.id = "c" + c.index; if (existing.has(c.index)) i.className = "skip"; s.append(i); }
+    $("progressPanel").hidden = false; $("verify").hidden = true;
+    $("progBar").style.width = (existing.size / plan.length * 100).toFixed(1) + "%";
+    $("progText").textContent = `${existing.size} of ${plan.length}`;
+  }
+  const cell = (i, cls) => { const el = $("c" + i); if (el) el.className = cls; };
+
+  // ---------- upload
+  async function uploadPiece(blob, type) {
+    const waits = [5000, 15000, 30000, 60000];
+    let storeRetried = false;
+    for (let attempt = 0; ; attempt++) {
+      try { return await assets.upload(blob, { type }); }
+      catch (e) {
+        const code = e && e.code;
+        if (code === "rate_limited" && attempt < waits.length) { log(`busy, waiting ${waits[attempt] / 1000}s`); await sleep(waits[attempt]); continue; }
+        if (code === "store_unavailable" && !storeRetried) { storeRetried = true; await sleep(3000); continue; }
+        throw e;
+      }
+    }
+  }
+
+  async function encodePiece(payload, header) {
+    const head = new TextEncoder().encode(header);
+    if (mode === "bin") return new Blob([head, payload], { type: "video/mp4" });
+    const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1]); r.onerror = rej; r.readAsDataURL(new Blob([payload])); });
+    return new Blob([head, b64], { type: "text/plain" });
+  }
+
+  async function run() {
+    if (!file || running) return;
+    running = true; pauseWanted = false;
+    $("start").disabled = true; $("pause").disabled = false; $("file").disabled = true; say("");
+    try { wake = await navigator.wakeLock?.request("screen"); } catch { wake = null; }
+    const role = $("role").value;
+    const whole = new C.Sha256();
+    let restart = false;
+    const t0 = performance.now(); let sent = 0;
+    try {
+      if (db) await db.doc(`transfers/${tid}`).set({
+        ...(record || {}), name: file.name, size: file.size, role, mode, chunkBytes: C.CHUNK_BYTES[mode], total: plan.length,
+        firstMiBSha256: tid.slice(1, 21), status: "uploading", done: existing.size, startedAt: record?.startedAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(), format: "RMSC1" });
+      for (let k = 0; k < plan.length; k++) {
+        const c = plan[k];
+        cell(c.index, "hash");
+        const payload = new Uint8Array(await file.slice(c.start, c.end).arrayBuffer());
+        whole.update(payload);
+        const sha = hexOf(await crypto.subtle.digest("SHA-256", payload));
+        const prior = existing.get(c.index);
+        if (prior && prior.sha256 === sha && prior.assetId) { cell(c.index, "skip"); continue; }
+        if (pauseWanted) throw { code: "paused" };
+        cell(c.index, "up");
+        let res;
+        try {
+          res = await uploadPiece(await encodePiece(payload, C.header(tid, c.index, plan.length, payload.length, sha, mode)), mode === "bin" ? "video/mp4" : "text/plain");
+        } catch (e) {
+          if (mode === "bin" && existing.size === 0 && k === 0 && (e.code === "unsupported_type" || e.code === "invalid_request")) {
+            log(`binary pieces refused (${e.code}); switching to text-encoded pieces`);
+            mode = "b64"; plan = C.planChunks(file.size, mode); drawSheet();
+            restart = true;
+            throw { code: "restart" };
+          }
+          throw e;
+        }
+        sent += payload.length;
+        const rec = { index: c.index, assetId: res.id, sha256: sha, size: payload.length, storedBytes: res.sizeBytes, mode, uploadedAt: new Date().toISOString() };
+        existing.set(c.index, rec);
+        if (db) {
+          await db.doc(`transfers/${tid}/chunks/${String(c.index).padStart(5, "0")}`).set(rec);
+          await db.doc(`transfers/${tid}`).update({ done: existing.size, updatedAt: new Date().toISOString() });
+        }
+        cell(c.index, "done");
+        const secs = (performance.now() - t0) / 1000, rate = sent / Math.max(secs, 0.001);
+        const left = plan.filter((p) => !existing.has(p.index)).reduce((s, p) => s + (p.end - p.start), 0);
+        $("progBar").style.width = (existing.size / plan.length * 100).toFixed(1) + "%";
+        $("progText").textContent = `${existing.size} of ${plan.length} · ${fmt(rate)}/s · about ${Math.ceil(left / rate / 60)} min left`;
+        log(`piece ${c.index + 1}/${plan.length} stored (${fmt(payload.length)}, ${sha.slice(0, 12)}…)`);
+      }
+      const digest = whole.hex();
+      if (db) await db.doc(`transfers/${tid}`).update({ status: "complete", sha256: digest, done: plan.length, completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      $("progBar").style.width = "100%"; $("progText").textContent = `${plan.length} of ${plan.length}`;
+      $("shaOut").textContent = digest;
+      $("macCmd").textContent = `shasum -a 256 "${file.name.replace(/"/g, '\\"')}"`;
+      $("verify").hidden = false;
+      record = { ...(record || {}), status: "complete" };
+      say("", "ok");
+      const name = document.createElement("bdi"); name.textContent = file.name;
+      $("msg").replaceChildren("Upload complete: ", name, " is in the workspace. Tell Claude it is uploaded.");
+      $("msg").hidden = false;
+      log(`complete, sha256 ${digest}`);
+    } catch (e) {
+      const code = e && e.code;
+      if (code === "restart") { /* encoding switched; run() starts again below */ }
+      else if (code === "paused") { say("Paused. Choose the same file again any time to resume; finished pieces are kept.", "info"); if (db) await db.doc(`transfers/${tid}`).update({ status: "paused", updatedAt: new Date().toISOString() }).catch(() => {}); }
+      else {
+        const k = plan.find((p) => !existing.has(p.index)); if (k) cell(k.index, "err");
+        say((ERR[code] || `The upload stopped (${code || e}). Finished pieces are kept: choose the same file again to resume.`), "err");
+        log(`stopped: ${code || e} ${e && e.message || ""}`);
+        if (db) await db.doc(`transfers/${tid}`).update({ status: "failed", lastError: String(code || e), updatedAt: new Date().toISOString() }).catch(() => {});
+      }
+    } finally {
+      running = false;
+      $("start").disabled = false; $("pause").disabled = true; $("file").disabled = false;
+      $("start").textContent = record && record.status === "complete" ? "Check again" : "Resume upload";
+      try { await wake?.release(); } catch {}
+      refreshUsage();
+    }
+    if (restart) return run();
+  }
+
+  // ---------- wiring
+  $("file").addEventListener("change", (ev) => ev.target.files[0] && choose(ev.target.files[0]));
+  const drop = $("drop");
+  drop.addEventListener("dragover", (ev) => { ev.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", (ev) => { ev.preventDefault(); drop.classList.remove("over"); const f = ev.dataTransfer.files[0]; if (f) choose(f); });
+  $("start").addEventListener("click", run);
+  $("pause").addEventListener("click", () => { pauseWanted = true; $("pause").disabled = true; say("Pausing after the current piece…"); });
+  const copy = (id, btn) => $(btn).addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText($(id).textContent); $(btn).textContent = "Copied"; setTimeout(() => ($(btn).textContent = "Copy"), 1500); }
+    catch { const r = document.createRange(); r.selectNodeContents($(id)); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  });
+  copy("shaOut", "copySha"); copy("macCmd", "copyCmd");
+  init();
+})();
+</script>
