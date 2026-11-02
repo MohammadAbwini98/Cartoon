@@ -1,0 +1,287 @@
+{
+ "_about": "Input names and output counts of every node the pilot graph uses, read from the node source at the pinned commits (infra/comfyui/nodes.lock.json). Read from source only: ComfyUI was not executed in the session that wrote this. Update together with the lock file.",
+ "CheckpointLoaderSimple": {
+  "required": [
+   "ckpt_name"
+  ],
+  "optional": [],
+  "outputs": 3,
+  "source": "ComfyUI@423cbd2 nodes.py"
+ },
+ "CLIPTextEncode": {
+  "required": [
+   "text",
+   "clip"
+  ],
+  "optional": [],
+  "outputs": 1,
+  "source": "ComfyUI@423cbd2 nodes.py"
+ },
+ "EmptyLatentImage": {
+  "required": [
+   "width",
+   "height",
+   "batch_size"
+  ],
+  "optional": [],
+  "outputs": 1,
+  "source": "ComfyUI@423cbd2 nodes.py"
+ },
+ "KSampler": {
+  "required": [
+   "model",
+   "seed",
+   "steps",
+   "cfg",
+   "sampler_name",
+   "scheduler",
+   "positive",
+   "negative",
+   "latent_image",
+   "denoise"
+  ],
+  "optional": [],
+  "outputs": 1,
+  "source": "ComfyUI@423cbd2 nodes.py; choices from comfy/samplers.py:971 (subset) and SCHEDULER_HANDLERS",
+  "choices": {
+   "sampler_name": [
+    "euler",
+    "euler_cfg_pp",
+    "euler_ancestral",
+    "euler_ancestral_cfg_pp",
+    "heun",
+    "dpm_2",
+    "dpm_2_ancestral",
+    "lms",
+    "dpmpp_2s_ancestral",
+    "dpmpp_sde",
+    "dpmpp_2m",
+    "dpmpp_2m_sde",
+    "dpmpp_3m_sde",
+    "ddpm",
+    "lcm",
+    "ddim",
+    "uni_pc",
+    "uni_pc_bh2"
+   ],
+   "scheduler": [
+    "simple",
+    "sgm_uniform",
+    "karras",
+    "exponential",
+    "ddim_uniform",
+    "beta",
+    "normal",
+    "linear_quadratic",
+    "kl_optimal"
+   ]
+  }
+ },
+ "VAEDecode": {
+  "required": [
+   "samples",
+   "vae"
+  ],
+  "optional": [],
+  "outputs": 1,
+  "source": "ComfyUI@423cbd2 nodes.py"
+ },
+ "LoadImage": {
+  "required": [
+   "image"
+  ],
+  "optional": [],
+  "outputs": 2,
+  "source": "ComfyUI@423cbd2 nodes.py"
+ },
+ "SaveImage": {
+  "required": [
+   "images",
+   "filename_prefix"
+  ],
+  "optional": [],
+  "outputs": 0,
+  "source": "ComfyUI@423cbd2 nodes.py"
+ },
+ "VHS_LoadVideo": {
+  "required": [
+   "video",
+   "force_rate",
+   "custom_width",
+   "custom_height",
+   "frame_load_cap",
+   "skip_first_frames",
+   "select_every_nth"
+  ],
+  "optional": [
+   "meta_batch",
+   "vae",
+   "format"
+  ],
+  "outputs": 4,
+  "source": "ComfyUI-VideoHelperSuite@4d907be videohelpersuite/load_video_nodes.py:424 (LoadVideoUpload); RETURN_TYPES (IMAGE, frame_count, audio, video_info)"
+ },
+ "AnimeLineArtPreprocessor": {
+  "required": [
+   "image"
+  ],
+  "optional": [
+   "resolution"
+  ],
+  "outputs": 1,
+  "source": "comfyui_controlnet_aux@a587a4c node_wrappers/lineart_anime.py:4"
+ },
+ "DWPreprocessor": {
+  "required": [
+   "image"
+  ],
+  "optional": [
+   "detect_hand",
+   "detect_body",
+   "detect_face",
+   "resolution",
+   "bbox_detector",
+   "pose_estimator",
+   "scale_stick_for_xinsr_cn"
+  ],
+  "outputs": 2,
+  "source": "comfyui_controlnet_aux@a587a4c node_wrappers/dwpose.py:32",
+  "choices": {
+   "bbox_detector": [
+    "None",
+    "yolox_l.torchscript.pt",
+    "yolox_l.onnx",
+    "yolo_nas_l_fp16.onnx",
+    "yolo_nas_m_fp16.onnx",
+    "yolo_nas_s_fp16.onnx"
+   ],
+   "pose_estimator": [
+    "dw-ll_ucoco_384_bs5.torchscript.pt",
+    "dw-ll_ucoco_384.onnx",
+    "dw-ll_ucoco.onnx"
+   ]
+  }
+ },
+ "IPAdapterUnifiedLoader": {
+  "required": [
+   "model",
+   "preset"
+  ],
+  "optional": [
+   "ipadapter"
+  ],
+  "outputs": 2,
+  "source": "ComfyUI_IPAdapter_plus@a0f451a IPAdapterPlus.py:556",
+  "choices": {
+   "preset": [
+    "LIGHT - SD1.5 only (low strength)",
+    "STANDARD (medium strength)",
+    "VIT-G (medium strength)",
+    "PLUS (high strength)",
+    "PLUS FACE (portraits)",
+    "FULL FACE - SD1.5 only (portraits stronger)"
+   ]
+  }
+ },
+ "IPAdapterAdvanced": {
+  "required": [
+   "model",
+   "ipadapter",
+   "image",
+   "weight",
+   "weight_type",
+   "combine_embeds",
+   "start_at",
+   "end_at",
+   "embeds_scaling"
+  ],
+  "optional": [
+   "image_negative",
+   "attn_mask",
+   "clip_vision"
+  ],
+  "outputs": 1,
+  "source": "ComfyUI_IPAdapter_plus@a0f451a IPAdapterPlus.py:762",
+  "choices": {
+   "combine_embeds": [
+    "concat",
+    "add",
+    "subtract",
+    "average",
+    "norm average"
+   ],
+   "embeds_scaling": [
+    "V only",
+    "K+V",
+    "K+V w/ C penalty",
+    "K+mean(V) w/ C penalty"
+   ]
+  }
+ },
+ "ADE_StandardStaticContextOptions": {
+  "required": [
+   "context_length",
+   "context_overlap"
+  ],
+  "optional": [
+   "fuse_method",
+   "use_on_equal_length",
+   "start_percent",
+   "guarantee_steps",
+   "prev_context",
+   "view_opts"
+  ],
+  "outputs": 1,
+  "source": "ComfyUI-AnimateDiff-Evolved@9257651 animatediff/nodes_context.py:56"
+ },
+ "ADE_AnimateDiffLoaderGen1": {
+  "required": [
+   "model",
+   "model_name",
+   "beta_schedule"
+  ],
+  "optional": [
+   "context_options",
+   "motion_lora",
+   "ad_settings",
+   "ad_keyframes",
+   "sample_settings",
+   "scale_multival",
+   "effect_multival",
+   "per_block"
+  ],
+  "outputs": 1,
+  "source": "ComfyUI-AnimateDiff-Evolved@9257651 animatediff/nodes_gen1.py:21"
+ },
+ "ACN_ControlNetLoaderAdvanced": {
+  "required": [
+   "cnet"
+  ],
+  "optional": [
+   "_tk_opt"
+  ],
+  "outputs": 1,
+  "source": "ComfyUI-Advanced-ControlNet@27a67fe adv_control/nodes_main.py:15"
+ },
+ "ACN_AdvancedControlNetApply_v2": {
+  "required": [
+   "positive",
+   "negative",
+   "control_net",
+   "image",
+   "strength",
+   "start_percent",
+   "end_percent"
+  ],
+  "optional": [
+   "mask_optional",
+   "timestep_kf",
+   "latent_kf_override",
+   "weights_override",
+   "vae_optional",
+   "inpaint_mask"
+  ],
+  "outputs": 2,
+  "source": "ComfyUI-Advanced-ControlNet@27a67fe adv_control/nodes_main.py (ACN_AdvancedControlNetApply_v2)"
+ }
+}

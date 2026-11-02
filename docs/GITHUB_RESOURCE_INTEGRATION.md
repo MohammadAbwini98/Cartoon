@@ -46,7 +46,7 @@ Key: **I** = integrate into our pipeline · **B** = adapt as an optional renderi
 | On-screen text reading-time check | `core/render/readcheck.mjs` | **R** | We are not planning burned-in on-screen text. Subtitles are better checked by `check_srt.py` (below). |
 | `cel-anime-80s` style prompt: model sheet before any shot; a colour model per lighting set; one protagonist accent colour; characters on twos and acting beats on threes; lip flaps of 3–4 mouth shapes at 8 fps; "borrow the era's craft, never a specific work's characters" | `styles/cel-anime-80s/STYLE.md` | **G** (main input to the style bible) | It is the closest written craft spec to a late-70s/80s TV-anime look. The no-copying rule matches our redesign goal. |
 | DIRECTOR.md model-sheet requirement (turnaround, 3–4 expressions, 2–3 key poses, palette, two style frames) and rights rule (§12) | `DIRECTOR.md` | **G** | Adopted as the minimum content of each character bible entry. |
-| TTS (Kokoro offline; edge-tts online), sampled score, procedural SFX | `core/tts`, `core/audio` | **R** for final audio; **G** for temporary tracks | Only relevant if the original audio is not cleared. Its tooling targets English and Chinese voices. Arabic replacement dialogue needs a different provider and human casting. |
+| TTS (Kokoro offline; edge-tts online), sampled score, procedural SFX | `core/tts`, `core/audio` | **R** | Not needed: the private test keeps the original Arabic soundtrack. |
 
 ### ClaudeAnimationBase
 

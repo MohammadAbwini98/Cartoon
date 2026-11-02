@@ -1,0 +1,13 @@
+{
+  "_about": "Exact sources for the GPU worker. Commits resolved with git ls-remote on 2026-11-02.",
+  "base_image": "runpod/worker-comfyui:5.11.0-base",
+  "worker_comfyui": {"repo": "https://github.com/runpod-workers/worker-comfyui", "tag": "5.11.0", "commit": "b7574c8fc7659cae73473140ff58aaec4d585046"},
+  "comfyui": {"repo": "https://github.com/comfyanonymous/ComfyUI", "tag": "v0.43.2", "commit": "423cbd20511becb1f16122ab518e92e58bfa03d9"},
+  "custom_nodes": [
+    {"name": "ComfyUI-AnimateDiff-Evolved", "repo": "https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved", "commit": "9257651221002dcba0a12f9cff37e1944e58fb60"},
+    {"name": "ComfyUI-Advanced-ControlNet", "repo": "https://github.com/Kosinkadink/ComfyUI-Advanced-ControlNet", "commit": "27a67fee80cf46c198b10588a5651f23d67d1e95"},
+    {"name": "comfyui_controlnet_aux", "repo": "https://github.com/Fannovel16/comfyui_controlnet_aux", "commit": "a587a4c1594524c1d2de5cd1a86cd868ff448e1c"},
+    {"name": "ComfyUI_IPAdapter_plus", "repo": "https://github.com/cubiq/ComfyUI_IPAdapter_plus", "commit": "a0f451a5113cf9becb0847b92884cb10cbdec0ef", "note": "last commit 2025-04-14; upstream is no longer actively maintained"},
+    {"name": "ComfyUI-VideoHelperSuite", "repo": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite", "commit": "4d907bee61e92c2e65af3bd6383a4e4d356126d1"}
+  ]
+}

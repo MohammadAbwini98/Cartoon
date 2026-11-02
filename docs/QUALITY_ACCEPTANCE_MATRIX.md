@@ -14,7 +14,7 @@ Status: draft, written before access to the episode or the existing project. The
 | G1 Keyframes | Character and background bible approved; redesigned keyframes for the pilot shots | Any motion render |
 | G2 Short pilot | Hardest 2–4 s, local baseline vs any authorized premium candidate | A 30–60 s scene |
 | G3 Scene | One complete 30–60 s scene | Full-episode render (needs your explicit approval and budget) |
-| G4 Episode | Full delivery | Distribution (also needs rights clearance, below) |
+| G4 Episode | Full delivery | Private viewing (project scope: private, non-commercial research) |
 
 ## Measured criteria
 
@@ -33,7 +33,7 @@ Applies from gate G2 onward unless marked otherwise.
 | M9 | Silhouette and occlusion | IoU of the source vs output character masks (segmentation on both); depth order at overlaps must match | IoU ≥ 0.75 (redesign tolerance). Zero depth-order inversions. |
 | M10 | Background stability | Masked background SSIM between consecutive frames after camera-motion compensation | ≥ 0.97 on static-camera shots |
 | M11 | Lip sync | Mouth-state timeline (open/closed, by construction if mouths are rendered as a controlled layer) vs the speech-activity timeline from the vocal stem | Onset and offset within ±2 frames for ≥ 95 % of lines. See the dub note below. |
-| M12 | Audio identity and sync (only if the audio is cleared) | Cross-correlation of the output audio vs `audio.wav` | Peak at lag 0 ± 1 ms; no drift across the episode |
+| M12 | Audio identity and sync (original Arabic soundtrack) | Cross-correlation of the output audio vs `audio.wav` | Peak at lag 0 ± 1 ms; no drift across the episode |
 | M13 | Loudness | `ebur128` integrated loudness and true peak | Per delivery spec: broadcast −23 LUFS ±1, ≤ −1 dBTP; web −14/−16 LUFS |
 | M14 | Resolution and encoding | ffprobe: size, frame rate, pixel format, colour tags; mezzanine + delivery encodes | 1920×1080 minimum; constant frame rate equal to the source fps, or a documented conversion; BT.709 tagged |
 | M15 | Reproducibility | Re-render one pilot shot with the recorded seed, models and parameters (MPS kernels are not always bit-exact) | SSIM ≥ 0.98 against the first render |
@@ -58,13 +58,9 @@ Scored 1–5 against a rubric, from side-by-side, A/B and wipe evidence.
 
 **Evidence retention.** Every failed render is kept with its parameters. Every gate report links its side-by-side MP4s and metric CSVs.
 
-## Rights clearance
+## Usage scope
 
-Rights clearance is a separate gate and has no technical pass.
-
-| Item | Status | Needed before public distribution |
-|---|---|---|
-| Source picture | unverified | Not needed if no source pixels ship. But shot-for-shot staging, timing and acting of a third-party episode is itself derivative of that episode. |
-| Dialogue script and voice performances | unverified | A licence from the rights holder, or new script and voices |
-| Music and sound effects | unverified | A licence, or replacement |
-| Underlying story | unverified | Confirm whether the story itself is public domain or licensed |
+Private, non-commercial research and testing (owner's instruction, 2026-11-02). The original Arabic soundtrack,
+dialogue, voices, narrative structure, scene order and timing are kept for the private test, and source and
+generated media stay private. Copyright clearance is not a pilot or engineering gate. Private use does not by
+itself establish permission; distribution or licensing would be reconsidered separately if the scope changes.
