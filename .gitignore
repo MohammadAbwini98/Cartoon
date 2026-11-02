@@ -1,5 +1,5 @@
 # media never goes into git: source episode, transfers, renders, models
-media/
+/media/
 *.mp4
 *.mov
 *.mkv
