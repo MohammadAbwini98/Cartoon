@@ -1,0 +1,9 @@
+{
+  "authorized_by": "user message, YYYY-MM-DD (quote the instruction)",
+  "currency": "USD",
+  "total_cap": 0,
+  "per_job_cap": 0,
+  "providers": [],
+  "scope": "e.g. pilot gate G2: hardest 2-4 s shot, at most N candidates",
+  "expires": "YYYY-MM-DD"
+}

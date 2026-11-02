@@ -1,0 +1,22 @@
+# Backends. Keys and URLs come from environment secrets of the cloud
+# environment, never from this file. A backend whose variables are unset is
+# reported as "not configured" and cannot be used.
+
+[comfyui]                       # self-hosted ComfyUI on a rented cloud GPU
+url_env = "COMFYUI_URL"         # e.g. https://<pod-id>-8188.proxy.runpod.net
+token_env = "COMFYUI_TOKEN"     # optional bearer token in front of the server
+# gpu_rate_per_hour = 0.0       # set from the host's price page to meter GPU time
+# rate_source = "https://…  (checked YYYY-MM-DD)"
+currency = "USD"
+
+[runpod]                        # RunPod serverless endpoint running the ComfyUI worker image
+endpoint_env = "RUNPOD_ENDPOINT_ID"
+key_env = "RUNPOD_API_KEY"
+
+[fal]                           # fal.ai queue API: hosted image/video models
+key_env = "FAL_KEY"
+# models = [ { model = "<fal model id>", task = "reference_to_video", inputs = ["prompt", "image", "reference_images"] } ]
+
+[replicate]
+key_env = "REPLICATE_API_TOKEN"
+# models = [ { model = "<owner>/<name>", task = "video_to_video", inputs = ["video", "prompt"] } ]

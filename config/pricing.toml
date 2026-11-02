@@ -1,0 +1,13 @@
+# Every price needs a source URL and the date it was read. Entries without
+# them give no estimate, and the budget refuses jobs without an estimate.
+# Nothing is filled in yet: prices must be read from each provider's current
+# price page when a provider is chosen for the pilot.
+#
+# [[price]]
+# provider = "fal"
+# model = "<model id>"
+# unit = "per_video_second"   # per_video_second | per_image | per_gpu_second | per_job
+# price = 0.0
+# currency = "USD"
+# source = "https://…"
+# checked_on = "YYYY-MM-DD"
