@@ -283,5 +283,17 @@
   ],
   "outputs": 2,
   "source": "ComfyUI-Advanced-ControlNet@27a67fe adv_control/nodes_main.py (ACN_AdvancedControlNetApply_v2)"
+ },
+ "ImageScale": {
+  "required": [
+   "image",
+   "upscale_method",
+   "width",
+   "height",
+   "crop"
+  ],
+  "optional": [],
+  "outputs": 1,
+  "source": "ComfyUI@423cbd2 nodes.py (ImageScale)"
  }
 }

@@ -271,7 +271,8 @@ class WorkerTests(Base):
         self.assertIn("signature", r.status(jid)["error"])
         # properly signed, but with a node outside the template
         bad = P.make_job("evil_job_1", "pilot_shot_v1", "mps",
-                         {"1": {"class_type": "ExecutePythonCode", "inputs": {"code": "import os"}}}, [], target="mac-m3pro")
+                         {"1": {"class_type": "ExecutePythonCode", "inputs": {"code": "import os"}}}, [], target="mac-m3pro",
+                         purpose="benchmark")
         r.store.put(P.k_job("evil_job_1"), P.canonical(P.sign(bad, KEY)))
         self.assertEqual(r.worker().wait(timeout=30), 0)
         self.assertEqual(r.status("evil_job_1")["state"], "rejected")
@@ -344,6 +345,110 @@ class WorkerTests(Base):
         os.chmod(cfg["signing_key_file"], 0o644)
         with self.assertRaisesRegex(SystemExit, "chmod 600"):
             Worker(cfg)
+
+
+# ------------------------------------------------------------------ security (compromised queue)
+class SecurityTests(Base):
+    def signed(self, r, jid, mutate=None, **kw):
+        g = pilot_shot_graph(PilotParams("shot.mp4", "ref.png", frames=6, width=512, height=288))
+        for n in g.values():
+            if n["class_type"] == "SaveImage":
+                n["inputs"]["filename_prefix"] = f"remake/{jid}/frame"
+        inputs = [r.mac._put_input(os.path.join(self.d, x)) for x in ("shot.mp4", "ref.png")]
+        job = P.make_job(jid, "pilot_shot_v1", "mps", g, inputs, {"frames": 6}, purpose="benchmark", **kw)
+        if mutate:
+            mutate(job)
+            job["graph_sha256"] = P.sha256_bytes(P.canonical(job["graph"]))
+        r.store.put(P.k_job(jid), P.canonical(P.sign(job, KEY)))
+        return job
+
+    def setUp(self):
+        super().setUp()
+        for n in ("shot.mp4", "ref.png"):
+            with open(os.path.join(self.d, n), "wb") as f:
+                f.write(os.urandom(300))
+
+    def run_worker(self, r):
+        w = r.worker()
+        out, err = w.communicate(timeout=60)
+        return out + err
+
+    def test_signed_but_malicious_jobs_never_reach_comfyui(self):
+        r = self.rig(seconds=0.3)
+        r.start_mock()
+        cases = {
+            "expired_job": dict(ttl_s=-10),
+            "other_target": dict(target="someone-elses-mac"),
+            "path_traversal": dict(mutate=lambda j: j["graph"]["1"]["inputs"].update(ckpt_name="../../.ssh/id_rsa")),
+            "abs_path": dict(mutate=lambda j: j["graph"]["5"]["inputs"].update(image="/etc/passwd")),
+            "extra_input": dict(mutate=lambda j: j["graph"]["2"]["inputs"].update(directory="/Users")),
+            "huge_batch": dict(mutate=lambda j: j["graph"]["16"]["inputs"].update(batch_size=5000)),
+            "huge_side": dict(mutate=lambda j: j["graph"]["16"]["inputs"].update(width=8192)),
+            "bad_input_name": dict(mutate=lambda j: j["inputs"][0].update(name="../escape.mp4")),
+        }
+        for jid, kw in cases.items():
+            self.signed(r, jid, **kw)
+        for _ in cases:
+            self.run_worker(r)
+        for jid in cases:
+            st = r.status(jid)
+            if jid == "other_target":
+                self.assertIsNone(st, "a job for another worker is not even picked up")
+                continue
+            self.assertEqual(st and st["state"], "rejected", f"{jid}: {st}")
+        self.assertEqual(r.events("prompt"), [], "no malicious job reached ComfyUI")
+        self.assertEqual(r.events("upload"), [], "no malicious job's files were uploaded")
+
+    def test_replay_after_status_deleted_is_refused(self):
+        r = self.rig(seconds=0.3)
+        r.start_mock()
+        self.signed(r, "replay_job")
+        self.run_worker(r)
+        self.assertEqual(r.status("replay_job")["state"], "succeeded")
+        r.store.delete(P.k_status("replay_job"))           # attacker wipes the record and re-queues it
+        self.run_worker(r)
+        self.assertEqual(r.status("replay_job")["state"], "rejected")
+        self.assertIn("replay", r.status("replay_job")["error"])
+        self.assertEqual(len(r.events("prompt")), 1)
+
+    def test_production_jobs_wait_until_enabled(self):
+        r = self.rig(seconds=0.3)
+        r.start_mock()
+        self.signed(r, "prod_job", mutate=lambda j: j.update(purpose="production"))
+        self.run_worker(r)
+        self.assertIsNone(r.status("prod_job"), "left queued, not run and not rejected")
+
+    def test_input_urls_limited_to_approved_https_hosts(self):
+        r = self.rig(seconds=0.3)
+        r.start_mock()
+        def to_url(j):
+            j["inputs"][0]["url"] = "http://evil.example/shot.mp4"
+        self.signed(r, "url_job", mutate=to_url)
+        self.run_worker(r)
+        st = r.status("url_job")
+        self.assertEqual((st["state"], st["error_kind"]), ("failed", "input"))
+        self.assertEqual(r.events("prompt"), [])
+
+    def test_forged_results_are_not_accepted(self):
+        r = self.rig(seconds=0.3)
+        r.start_mock()
+        jid = r.submit()
+        self.run_worker(r)
+        m = json.loads(r.store.get(P.k_result(jid, "manifest.json")))
+        self.assertTrue(P.verify_manifest(m, KEY))
+        m["files"][0]["sha256"] = "0" * 64
+        r.store.put(P.k_result(jid, "manifest.json"), P.canonical(m))
+        with self.assertRaisesRegex(IOError, "signature"):
+            r.mac.fetch(jid, None, self.d)
+
+    def test_secrets_never_leave_the_machine(self):
+        r = self.rig(seconds=0.3)
+        r.start_mock()
+        r.submit()
+        logs = self.run_worker(r)
+        self.assertNotIn(KEY.decode(), logs)
+        for k in r.store.list(""):
+            self.assertNotIn(KEY, r.store.get(k), f"signing key found in store object {k}")
 
 
 # ------------------------------------------------------------------ scheduler

@@ -19,3 +19,7 @@ __pycache__/
 *.pyc
 .venv/
 node_modules/
+
+# worker credentials
+secrets.json
+*.key

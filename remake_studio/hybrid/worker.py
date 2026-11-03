@@ -29,6 +29,7 @@ import tempfile
 import threading
 import time
 import urllib.parse
+import urllib.request
 
 from remake_studio.hybrid import protocol as P
 from remake_studio.hybrid.transport import Conflict, from_config
@@ -130,6 +131,27 @@ class Worker:
         self.match = cfg.get("comfyui_process_match", "main.py")
         self.mem_interval = float(cfg.get("memory_sample_seconds", 1))
         self.busy = None
+        # production renders stay off until the owner enables them in the config
+        self.purposes = list(cfg.get("allowed_purposes", ["benchmark"]))
+        self.url_hosts = list(cfg.get("input_url_hosts", []))
+        self.ledger_path = os.path.join(self.state_dir, "executed.jsonl")
+        self.schemas = P.load_schemas()
+
+    # ------------------------------------------------------------ replay ledger
+    def _ledger(self) -> dict:
+        seen = {}
+        if os.path.exists(self.ledger_path):
+            with open(self.ledger_path) as f:
+                for line in f:
+                    e = json.loads(line)
+                    seen[e["job_id"]] = e["nonce"]
+        return seen
+
+    def _ledger_add(self, job):
+        with open(self.ledger_path, "a") as f:
+            f.write(json.dumps({"job_id": job["job_id"], "nonce": job.get("nonce"), "t": time.time()}) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
 
     @staticmethod
     def _load_key(path: str) -> bytes:
@@ -201,8 +223,10 @@ class Worker:
         jobs = []
         for k in self.store.list("jobs/"):
             job = self._json(k)
-            if not job or job.get("target") not in ("mac", self.id):
+            if not job or job.get("target") != self.id:
                 continue
+            if job.get("purpose") not in self.purposes:
+                continue          # left queued: this worker does not run that purpose yet
             st = self._json(P.k_status(job["job_id"]))
             if st and st.get("state") in P.TERMINAL:
                 continue
@@ -267,7 +291,14 @@ class Worker:
             if not P.verify(job, self.key):
                 self._status(jid, "rejected", error="signature does not verify with this worker's key")
                 return
-            problems = P.validate(job, self.allowed)
+            problems = P.validate(job, self.allowed, worker_id=self.id, schemas=self.schemas)
+            if job.get("purpose") not in self.purposes:
+                problems.append(f"purpose {job.get('purpose')!r} not enabled on this worker")
+            seen = self._ledger()
+            if inflight is None and jid in seen:
+                problems.append("job already executed on this worker (replay)")
+            if job.get("nonce") in seen.values() and seen.get(jid) != job.get("nonce"):
+                problems.append("nonce already used by another job (replay)")
             if problems:
                 self._status(jid, "rejected", error="; ".join(problems))
                 return
@@ -281,6 +312,7 @@ class Worker:
             attempt = inflight.get("attempt", 1) if inflight else 1
             t_start = inflight.get("started", time.time()) if inflight else time.time()
             if prompt_id is None:
+                self._ledger_add(job)
                 prompt_id = self._submit(job)
                 if prompt_id is None:
                     return
@@ -300,7 +332,10 @@ class Worker:
         try:
             paths = []
             for i in job["inputs"]:
-                data = self.store.get(i["key"])
+                try:
+                    data = self._fetch_input(i)
+                except Exception:  # noqa: BLE001 — network or store failure: fail this input, not the worker
+                    data = None
                 if data is None or P.sha256_bytes(data) != i["sha256"]:
                     self._status(jid, "failed", error_kind="input", error=f"input {i['name']} missing or hash mismatch")
                     return None
@@ -319,6 +354,15 @@ class Worker:
             return None
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
+
+    def _fetch_input(self, i) -> bytes | None:
+        if i.get("url"):
+            u = urllib.parse.urlparse(i["url"])
+            if u.scheme != "https" or u.hostname not in self.url_hosts:
+                return None
+            with urllib.request.urlopen(i["url"], timeout=300) as r:
+                return r.read()
+        return self.store.get(i["key"])
 
     def _watch(self, job, prompt_id, attempt, t_start):
         jid = job["job_id"]
@@ -405,7 +449,8 @@ class Worker:
             metrics = {**metrics, "render_wall_s": round(render_s, 2), "output_frames": frames,
                        "sec_per_frame": round(render_s / frames, 3) if frames else None,
                        "effective_fps": round(frames / render_s, 4) if frames and render_s else None}
-            self.store.put(P.k_result(jid, "manifest.json"), P.canonical({"files": manifest, "prompt_id": prompt_id}))
+            self.store.put(P.k_result(jid, "manifest.json"), P.canonical(P.sign_manifest(
+                {"job_id": jid, "nonce": job.get("nonce"), "files": manifest, "prompt_id": prompt_id, "worker": self.id}, self.key)))
             exp = job.get("expect", {}).get("frames")
             if exp is not None and frames != exp:
                 self._status(jid, "failed", error_kind="output", error=f"{frames} frames, expected {exp}", metrics=metrics)

@@ -78,6 +78,8 @@ class MacWorkerQueue:
 
     def fetch(self, remote_id, status, dest_dir):
         m = json.loads(self.store.get(P.k_result(remote_id, "manifest.json")))
+        if not P.verify_manifest(m, self.key) or m.get("job_id") != remote_id:
+            raise IOError("result manifest signature does not verify; results not accepted")
         out = []
         for f in m["files"]:
             data = self.store.get(P.k_result(remote_id, f["name"]))
