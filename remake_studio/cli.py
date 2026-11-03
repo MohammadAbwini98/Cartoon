@@ -7,6 +7,8 @@
   remake jobs                                         generation jobs and their states
   remake hybrid status [--json FILE]                  workers, jobs on every backend, MPS evidence, budget
   remake hybrid decide TEMPLATE FRAMES WxH [--benchmark] [--fallback]   where a render would run, and why
+  remake hybrid bench submit [--shot clip.mp4 --ref ref.png]   queue the next MPS benchmark stage for the Mac
+  remake hybrid bench collect [--shot clip.mp4]                collect results and record MPS evidence
 """
 from __future__ import annotations
 
@@ -57,10 +59,10 @@ def main(argv=None):
         return 0
     if cmd == "hybrid":
         from remake_studio.hybrid import dashboard
-        from remake_studio.hybrid.scheduler import Scheduler, Task
+        from remake_studio.hybrid.scheduler import Compat, Scheduler, Task
         from remake_studio.providers import registry
         from remake_studio.providers.budget import Budget
-        mac, note = dashboard.load_mac()
+        mac, note = dashboard.load_mac(os.environ.get("REMAKE_HYBRID_CONFIG", "config/hybrid.toml"))
         if rest and rest[0] == "status":
             snap = dashboard.snapshot(STATE, mac, note)
             if "--json" in rest:
@@ -70,6 +72,50 @@ def main(argv=None):
                 print(f"worker {w['id']}: {'online' if w['online'] else 'offline'} {w.get('note') or ''}")
             print(f"jobs: {len(snap['jobs'])}; MPS evidence: {list(snap['compat']) or 'none yet'}")
             return 0
+        if rest[:1] == ["bench"]:
+            from remake_studio.hybrid import benchmark as B
+            from remake_studio.providers.jobs import JobStore, Runner
+            if mac is None:
+                print(f"Mac worker {note}"); return 1
+            arg = lambda k: rest[rest.index(k) + 1] if k in rest else None  # noqa: E731
+            bench_path = os.path.join(STATE, "benchmark.json")
+            bench = json.load(open(bench_path)) if os.path.exists(bench_path) else {"stages": {}}
+            runner = Runner({"mac": mac}, STATE, os.path.join("media", "renders"), poll_seconds=10, timeout_seconds=5)
+            if rest[1] == "submit":
+                st = B.next_stage({k: v["state"] for k, v in bench["stages"].items() if v["state"] in ("succeeded", "failed")})
+                if st is None:
+                    print("benchmark finished or stopped after a failure:", json.dumps(bench, indent=2)); return 0
+                if st["id"] in bench["stages"] and bench["stages"][st["id"]]["state"] not in ("succeeded", "failed"):
+                    print(f"{st['id']} already queued"); return 0
+                smoke = None
+                if st["template"] == "smoke_v1":
+                    smoke = os.path.join(STATE, "smoke.png")
+                    import subprocess
+                    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc=s=512x288", "-frames:v", "1", smoke], check=True)
+                req = B.stage_request(st, arg("--shot"), arg("--ref"), smoke)
+                job = runner.create("mac", st["template"], req, req["inputs"], shot=f"benchmark {st['id']}", max_attempts=1)
+                job = runner.run(job["id"])
+                bench["stages"][st["id"]] = {"job": job["id"], "state": "queued", "stage": st}
+                json.dump(bench, open(bench_path, "w"), indent=2)
+                print(f"queued {st['id']} ({st['purpose']}) as {job['id']} → remote {job['remote_id']}"); return 0
+            if rest[1] == "collect":
+                for sid, b in bench["stages"].items():
+                    if b["state"] in ("succeeded", "failed"):
+                        continue
+                    job = runner.run(b["job"])
+                    if job["state"] in ("submitted", "running"):
+                        print(f"{sid}: still {job['state']}"); continue
+                    st = mac.status(job["remote_id"]).raw
+                    temporal = None
+                    if arg("--shot") and job["state"] == "validated" and b["stage"]["frames"] > 2:
+                        import glob, tempfile
+                        outs = sorted(o["path"] for o in job["outputs"])
+                        temporal = B.temporal_metrics(B._gray(B.frames_list(outs, tempfile.mktemp(suffix=".txt"))), B._gray(arg("--shot")))
+                    w, h = (512, 288) if b["stage"]["template"] != "smoke_v1" else (512, 288)
+                    rec = B.record(Compat(STATE), b["stage"], {**st, "job_id": job["remote_id"]}, temporal, w, h)
+                    b["state"] = "succeeded" if job["state"] == "validated" else "failed"
+                    print(f"{sid}: {b['state']}; evidence {json.dumps(rec)}")
+                json.dump(bench, open(bench_path, "w"), indent=2); return 0
         if rest and rest[0] == "decide":
             w, h = map(int, rest[3].split("x"))
             providers, _ = registry.build()

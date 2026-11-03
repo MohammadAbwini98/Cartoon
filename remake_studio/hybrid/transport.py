@@ -153,14 +153,37 @@ def sigv4_authorization(method: str, url: str, headers: dict, payload_sha256: st
     return f"AWS4-HMAC-SHA256 Credential={access_key}/{scope}, SignedHeaders={signed}, Signature={sig}"
 
 
+def presign_url(method: str, url: str, access_key: str, secret_key: str, region: str, amz_date: str,
+                expires: int = 3600, service: str = "s3") -> str:
+    """Query-string SigV4 (presigned URL). Grants one method on one object until it expires; the
+    holder never sees the credentials. Signed headers: host only; payload UNSIGNED-PAYLOAD."""
+    u = urllib.parse.urlsplit(url)
+    day = amz_date[:8]
+    scope = f"{day}/{region}/{service}/aws4_request"
+    q = urllib.parse.parse_qsl(u.query, keep_blank_values=True) + [
+        ("X-Amz-Algorithm", "AWS4-HMAC-SHA256"), ("X-Amz-Credential", f"{access_key}/{scope}"),
+        ("X-Amz-Date", amz_date), ("X-Amz-Expires", str(int(expires))), ("X-Amz-SignedHeaders", "host")]
+    enc = lambda x: urllib.parse.quote(x, safe="-_.~")  # noqa: E731
+    query = "&".join(f"{enc(k)}={enc(v)}" for k, v in sorted(q))
+    path = urllib.parse.quote(urllib.parse.unquote(u.path or "/"), safe="/-_.~")
+    canonical_request = "\n".join([method, path, query, f"host:{u.netloc}\n", "host", "UNSIGNED-PAYLOAD"])
+    to_sign = "\n".join(["AWS4-HMAC-SHA256", amz_date, scope, hashlib.sha256(canonical_request.encode()).hexdigest()])
+    k = _hmac(_hmac(_hmac(_hmac(("AWS4" + secret_key).encode(), day), region), service), "aws4_request")
+    sig = hmac.new(k, to_sign.encode(), hashlib.sha256).hexdigest()
+    return f"{u.scheme}://{u.netloc}{path}?{query}&X-Amz-Signature={sig}"
+
+
 class S3Transport(Transport):
     def __init__(self, endpoint: str, bucket: str, access_key: str, secret_key: str, region: str = "auto",
                  timeout: float = 120.0, now=lambda: dt.datetime.now(dt.timezone.utc)):
         self.endpoint, self.bucket = endpoint.rstrip("/"), bucket
         self.ak, self.sk, self.region, self.timeout, self.now = access_key, secret_key, region, timeout, now
 
-    def _request(self, method, key="", query="", data=b"", extra=None):
-        url = f"{self.endpoint}/{self.bucket}/{urllib.parse.quote(key, safe='/-_.~')}" + (f"?{query}" if query else "")
+    def _url(self, key: str, query: str = "") -> str:
+        return f"{self.endpoint}/{self.bucket}/{urllib.parse.quote(key, safe='/-_.~')}" + (f"?{query}" if query else "")
+
+    def _request(self, method, key="", query="", data=b"", extra=None, stream=False):
+        url = self._url(key, query)
         amz_date = self.now().strftime("%Y%m%dT%H%M%SZ")
         payload = hashlib.sha256(data).hexdigest()
         headers = {"host": urllib.parse.urlsplit(url).netloc, "x-amz-date": amz_date, "x-amz-content-sha256": payload,
@@ -168,10 +191,61 @@ class S3Transport(Transport):
         headers["Authorization"] = sigv4_authorization(method, url, headers, payload, self.ak, self.sk, self.region, amz_date)
         req = urllib.request.Request(url, data=data if method in ("PUT", "POST") else None, method=method, headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as r:
-                return r.status, dict(r.headers), r.read()
+            r = urllib.request.urlopen(req, timeout=self.timeout)
         except urllib.error.HTTPError as e:
             return e.code, dict(e.headers), e.read()
+        if stream:
+            return r.status, dict(r.headers), r
+        with r:
+            return r.status, dict(r.headers), r.read()
+
+    # ---- presigned URLs, multipart, streaming (media bucket)
+    def presign(self, method: str, key: str, expires: int = 86400, query: str = "") -> str:
+        return presign_url(method, self._url(key, query), self.ak, self.sk, self.region,
+                           self.now().strftime("%Y%m%dT%H%M%SZ"), expires)
+
+    def head(self, key: str) -> dict | None:
+        st, h, _ = self._request("HEAD", key)
+        if st == 404:
+            return None
+        if st >= 300:
+            raise IOError(f"S3 HEAD {key}: HTTP {st}")
+        h = {k.lower(): v for k, v in h.items()}
+        return {"bytes": int(h.get("content-length", 0)), "etag": h.get("etag", "").strip('"'),
+                "content_type": h.get("content-type")}
+
+    def create_multipart(self, key: str, content_type: str = "application/octet-stream") -> str:
+        st, _, body = self._request("POST", key, "uploads=", extra={"Content-Type": content_type})
+        if st >= 300:
+            raise IOError(f"S3 CreateMultipartUpload {key}: HTTP {st} {body[:200]!r}")
+        root = ET.fromstring(body)
+        ns = root.tag.split("}")[0] + "}" if root.tag.startswith("{") else ""
+        return root.findtext(f"{ns}UploadId")
+
+    def complete_multipart(self, key: str, upload_id: str, parts: list[tuple[int, str]]) -> str:
+        xml = "<CompleteMultipartUpload>" + "".join(
+            f"<Part><PartNumber>{n}</PartNumber><ETag>\"{e.strip(chr(34))}\"</ETag></Part>" for n, e in sorted(parts)) + \
+            "</CompleteMultipartUpload>"
+        st, _, body = self._request("POST", key, urllib.parse.urlencode({"uploadId": upload_id}), data=xml.encode(),
+                                    extra={"Content-Type": "application/xml"})
+        if st >= 300 or b"<Error>" in body:
+            raise IOError(f"S3 CompleteMultipartUpload {key}: HTTP {st} {body[:300]!r}")
+        return key
+
+    def abort_multipart(self, key: str, upload_id: str):
+        self._request("DELETE", key, urllib.parse.urlencode({"uploadId": upload_id}))
+
+    def download(self, key: str, dest: str) -> tuple[str, int]:
+        """Stream an object to disk; returns (sha256, bytes)."""
+        st, _, r = self._request("GET", key, stream=True)
+        if st >= 300:
+            raise IOError(f"S3 GET {key}: HTTP {st}")
+        h, n = hashlib.sha256(), 0
+        with r, open(dest + ".part", "wb") as f:
+            for block in iter(lambda: r.read(1 << 22), b""):
+                f.write(block); h.update(block); n += len(block)
+        os.replace(dest + ".part", dest)
+        return h.hexdigest(), n
 
     def get_etag(self, key):
         st, h, body = self._request("GET", key)
@@ -185,8 +259,8 @@ class S3Transport(Transport):
         r = self.get_etag(key)
         return r[0] if r else None
 
-    def put(self, key, data, if_none_match=False, if_match=None):
-        extra = {}
+    def put(self, key, data, if_none_match=False, if_match=None, content_type=None):
+        extra = {"Content-Type": content_type} if content_type else {}
         if if_none_match:
             extra["If-None-Match"] = "*"
         if if_match is not None:

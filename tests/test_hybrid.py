@@ -347,6 +347,31 @@ class WorkerTests(Base):
             Worker(cfg)
 
 
+# ------------------------------------------------------------------ benchmark CLI path
+class BenchCliTests(Base):
+    def test_cli_submits_smoke_stage_and_records_evidence(self):
+        r = self.rig(seconds=0.5, frames=1)
+        r.start_mock()
+        state = os.path.join(self.d, "orch_state")
+        toml = os.path.join(self.d, "hybrid.toml")
+        with open(toml, "w") as f:
+            f.write(f'worker_id = "mac-m3pro"\nsigning_key_env = "TEST_SIGNING_KEY"\n[transport]\ntype = "local"\nroot = "{r.store_dir}"\n')
+        env = {**os.environ, "REMAKE_STATE": state, "REMAKE_HYBRID_CONFIG": toml, "TEST_SIGNING_KEY": KEY.decode(),
+               "PYTHONPATH": ROOT}
+        cli = lambda *a: subprocess.run([sys.executable, "-m", "remake_studio.cli", "hybrid", *a], cwd=self.d, env=env,
+                                        capture_output=True, text=True, timeout=120)
+        out = cli("bench", "submit")
+        self.assertIn("queued B0", out.stdout, out.stderr)
+        self.assertIn("already queued", cli("bench", "submit").stdout)
+        self.assertEqual(r.worker().wait(timeout=60), 0)
+        out = cli("bench", "collect")
+        self.assertIn("B0: succeeded", out.stdout, out.stderr)
+        compat = json.load(open(os.path.join(state, "compat.json")))
+        self.assertEqual(compat["smoke_v1/mps"]["status"], "validated")
+        out = cli("bench", "submit")
+        self.assertIn("needs a source shot", out.stderr + out.stdout, "B1 requires the real source shot")
+
+
 # ------------------------------------------------------------------ security (compromised queue)
 class SecurityTests(Base):
     def signed(self, r, jid, mutate=None, **kw):

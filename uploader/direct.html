@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Remake Studio direct upload</title>
+<style>
+:root{--bg:#f4f6f2;--fg:#1a1e22;--muted:#5b646b;--rule:#d4d9d1;--blue:#2a56c6;--green:#2c7a4b;--red:#c33a2c}
+@media (prefers-color-scheme:dark){:root{--bg:#121518;--fg:#e6e9e3;--muted:#9aa3a9;--rule:#2b3238;--blue:#86a6ff;--green:#74cf98;--red:#ff8a7d;color-scheme:dark}}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,sans-serif;margin:0}
+main{max-width:720px;margin:0 auto;padding:28px max(16px,env(safe-area-inset-left))}
+h1{font-size:1.5rem;margin:0 0 6px}p{margin:6px 0}.muted{color:var(--muted)}
+.bar{height:8px;background:var(--rule);border-radius:4px;overflow:hidden;margin:14px 0}.bar span{display:block;height:100%;width:0;background:var(--blue)}
+button{font:600 .95rem system-ui;padding:9px 18px;border-radius:5px;border:1px solid var(--blue);background:var(--blue);color:var(--bg);cursor:pointer}
+button:disabled{opacity:.45}code{font-family:ui-monospace,Menlo,monospace;font-size:.85rem;overflow-wrap:anywhere}
+#msg.ok{color:var(--green)}#msg.err{color:var(--red)}
+</style></head><body><main>
+<h1>Upload the episode</h1>
+<p class="muted">Straight to the studio's private storage. This page holds only time-limited upload links for this one file, no account keys. Links expire <span id="exp"></span>.</p>
+<p>Expected file: <strong id="want" dir="auto"></strong> (<span id="wantSize"></span>)</p>
+<p><input type="file" id="file"> <button id="go" disabled>Upload</button></p>
+<div class="bar"><span id="bar"></span></div>
+<p id="prog" class="muted"></p><p id="msg"></p>
+<p id="shaLine" hidden>SHA-256: <code id="sha"></code></p>
+</main>
+<script>/*__TRANSFER_CORE__*/</script>
+<script>
+const CFG = /*__CONFIG__*/null;
+(() => {
+  "use strict";
+  const $ = (i) => document.getElementById(i);
+  const fmt = (b) => b >= 1073741824 ? (b / 1073741824).toFixed(2) + " GB" : (b / 1048576).toFixed(1) + " MB";
+  const hex = (buf) => Array.from(new Uint8Array(buf), (x) => x.toString(16).padStart(2, "0")).join("");
+  const key = "remake-direct-" + CFG.id;
+  const saved = (() => { try { return JSON.parse(localStorage.getItem(key) || "{}"); } catch { return {}; } })();
+  const save = () => { try { localStorage.setItem(key, JSON.stringify(saved)); } catch {} };
+  $("want").textContent = CFG.name; $("wantSize").textContent = fmt(CFG.size);
+  $("exp").textContent = new Date(CFG.expires * 1000).toLocaleString();
+  let file = null;
+  const say = (t, c = "") => { $("msg").textContent = t; $("msg").className = c; };
+  $("file").addEventListener("change", (e) => {
+    file = e.target.files[0] || null;
+    if (file && file.size !== CFG.size) { say(`This file is ${fmt(file.size)}; the link was prepared for ${fmt(CFG.size)}. Choose ${CFG.name}.`, "err"); $("go").disabled = true; return; }
+    $("go").disabled = !file; say(saved.parts ? `Resuming: ${Object.keys(saved.parts).length} of ${CFG.parts.length} parts already sent.` : "");
+  });
+  async function putWithRetry(url, body) {
+    for (let a = 0; a < 5; a++) {
+      try {
+        const r = await fetch(url, { method: "PUT", body });
+        if (r.ok) return r;
+        if (r.status < 500 && r.status !== 429) throw new Error(`storage refused the part (HTTP ${r.status}); the link may have expired`);
+      } catch (e) { if (a === 4 || /refused/.test(e.message)) throw e; }
+      await new Promise((res) => setTimeout(res, 2000 * 2 ** a));
+    }
+  }
+  $("go").addEventListener("click", async () => {
+    $("go").disabled = true; $("file").disabled = true; say("");
+    const whole = new TransferCore.Sha256(); saved.parts = saved.parts || {};
+    const t0 = performance.now(); let sent = 0;
+    try {
+      for (const p of CFG.parts) {
+        const blob = file.slice(p.start, p.end);
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        whole.update(bytes);
+        const sha = hex(await crypto.subtle.digest("SHA-256", bytes));
+        const prior = saved.parts[p.n];
+        if (!(prior && prior.sha256 === sha && prior.etag)) {
+          const r = await putWithRetry(p.url, blob);
+          const etag = r.headers.get("ETag");
+          if (!etag) throw new Error("storage did not return the part's ETag");
+          saved.parts[p.n] = { etag, sha256: sha, size: bytes.length }; save();
+          sent += bytes.length;
+        }
+        const done = Object.keys(saved.parts).length, secs = (performance.now() - t0) / 1000;
+        $("bar").style.width = (done / CFG.parts.length * 100).toFixed(1) + "%";
+        $("prog").textContent = `${done} of ${CFG.parts.length} parts` + (sent ? ` · ${fmt(sent / secs)}/s` : "");
+      }
+      const digest = whole.hex();
+      const manifest = { id: CFG.id, upload_id: CFG.upload_id, key: CFG.key, name: file.name, size: file.size, sha256: digest,
+        parts: CFG.parts.map((p) => ({ n: p.n, ...saved.parts[p.n] })), finished: new Date().toISOString() };
+      await putWithRetry(CFG.manifest_url, new Blob([JSON.stringify(manifest)], { type: "application/json" }));
+      $("sha").textContent = digest; $("shaLine").hidden = false;
+      say("Upload complete. Tell Claude it is uploaded; Claude finishes the upload and checks the hash.", "ok");
+      try { localStorage.removeItem(key); } catch {}
+    } catch (e) {
+      say(`${e.message}. Parts already sent are kept: choose the same file again and press Upload to resume.`, "err");
+      $("go").disabled = false; $("file").disabled = false;
+    }
+  });
+})();
+</script></body></html>

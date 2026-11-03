@@ -12,3 +12,10 @@ bucket = "remake-studio-queue"
 region = "auto"
 access_key_env = "REMAKE_STORE_ACCESS_KEY"
 secret_key_env = "REMAKE_STORE_SECRET_KEY"
+
+[media]                          # episode, generated frames, renders: cloud credentials only
+endpoint = "https://<account-id>.r2.cloudflarestorage.com"
+bucket = "remake-media"
+region = "auto"
+access_key_env = "REMAKE_MEDIA_ACCESS_KEY"
+secret_key_env = "REMAKE_MEDIA_SECRET_KEY"

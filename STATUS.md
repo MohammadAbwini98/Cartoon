@@ -1,4 +1,4 @@
-# Status — 2026-11-03
+# Status — 2026-11-03 (deployment pass)
 
 Milestone being built toward: a cloud system that receives the episode MP4, analyses it, generates a
 redesigned short scene, keeps the original Arabic audio and returns a downloadable result.
@@ -17,6 +17,22 @@ redesigned short scene, keeps the original Arabic audio and returns a downloadab
 | Pilot graph (`workflows.py`) | Generated graph passes a static check against node schemas read from source at the pinned commits; checker catches renamed nodes, bad choices, missing inputs, bad output slots |
 | Shot assembly (`assemble.py`) | 48 generated frames → 23.976 fps MP4, frame-exact, upscaled to 512×288, original audio aligned within 12 ms; wrong frame count refused; side-by-side evidence video |
 | GPU worker pins (`infra/comfyui/`) | Dockerfile, lock file and node schemas reference identical commits; all model URLs pin a Hugging Face commit with size and SHA-256 from the HF API; fetcher verifies and refuses corrupt or unpinned files |
+
+## Deployment pass (commit after 3846e05)
+
+**Hybrid system: NOT operational.** It has not processed a real job on the Mac or on a cloud GPU.
+
+| Area | State | Evidence |
+|---|---|---|
+| GitHub | **blocked** | This session cannot create repositories (API: "sessions are bound to their configured repositories"). Needs an empty private repo created by the owner. |
+| Security model | verified against the stand-in | signed-but-malicious jobs (expired, wrong worker, path traversal, absolute path, extra input, oversize batch/side, bad input name) never reach ComfyUI; replay after status deletion refused; production jobs wait; input URLs only from approved HTTPS hosts; forged result manifests refused; secrets absent from logs and store; tracked-file secret scan clean |
+| Storage (R2) | implemented, **not verified on R2** | presigned signer matches the AWS example; real Chromium uploaded a 13 MB file in 3 parts directly to a SigV4-enforcing stand-in, cloud completed and verified SHA-256; expired and redirected links refused; wrong secret refused. No R2 credentials exist in this environment. |
+| Mac setup | implemented, **never run on a Mac** | full flow on a simulated Mac with real files, permissions, hashing and the queue stand-in: fresh install, model reuse without download, LAN exposure and missing MPS fail loudly, reuse mode never changes an existing install |
+| Benchmark | ready, **no results** | CLI submit → worker → collect → evidence recorded (B0 path); B1–B3 need the source shot |
+| First Remi remake | **blocked** | episode not uploaded |
+
+Running third-party server code here (ComfyUI, MinIO) is blocked by this session's execution policy, so
+no real ComfyUI or real S3 server ran in this environment.
 
 ## Hybrid rendering (Mac M3 Pro + cloud) — built and tested here; **not yet operational**
 

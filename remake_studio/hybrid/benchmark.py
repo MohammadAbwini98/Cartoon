@@ -104,3 +104,24 @@ def record(compat: Compat, stage: dict, status: dict, temporal: dict | None, wid
     fields.setdefault("quality_equivalent", compat.get(stage["template"], "mps").get("quality_equivalent"))
     compat.record(stage["template"], "mps", **fields)
     return compat.get(stage["template"], "mps")
+
+
+BASELINE_CHECKPOINT = "v1-5-pruned-emaonly.safetensors"
+
+
+def stage_request(stage: dict, shot: str | None, ref: str | None, smoke_image: str | None) -> dict:
+    """Provider request for one benchmark stage (MacWorkerQueue.submit)."""
+    from remake_studio.workflows import mps_params, variant_graph
+    if stage["template"] == "smoke_v1":
+        if not smoke_image:
+            raise ValueError("smoke stage needs an image")
+        return {"graph": smoke_graph(os.path.basename(smoke_image)), "template": "smoke_v1", "variant": "mps",
+                "inputs": [smoke_image], "expect": {"frames": 1}, "purpose": "benchmark", "expected_seconds": 30}
+    if not (shot and ref):
+        raise ValueError(f"{stage['id']} needs a source shot clip and a character reference image")
+    p = mps_params(control_video=os.path.basename(shot), reference_image=os.path.basename(ref), frames=stage["frames"],
+                   checkpoint=BASELINE_CHECKPOINT,
+                   positive="hand-painted cel animation, redesigned characters, clean line art, soft painted background")
+    return {"graph": variant_graph(p, "mps", stage["template"]), "template": stage["template"], "variant": "mps",
+            "inputs": [shot, ref], "expect": {"frames": stage["frames"]}, "purpose": "benchmark",
+            "expected_seconds": 20 * stage["frames"]}
