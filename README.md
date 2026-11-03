@@ -3,7 +3,7 @@
 Cloud pipeline that rebuilds an animated episode's visuals (new character and environment designs) while
 keeping its narrative, shot timing, acting and original Arabic soundtrack. Private, non-commercial research.
 
-Repository: https://github.com/MohammadAbwini98/Cartoon (private).
+Repository: https://github.com/MohammadAbwini98/Cartoon.
 Current state, verified results and next steps: **[STATUS.md](STATUS.md)**.
 Mac render worker: **[docs/MAC_SETUP_CHECKLIST.md](docs/MAC_SETUP_CHECKLIST.md)**.
 

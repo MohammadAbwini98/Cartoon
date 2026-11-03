@@ -1,9 +1,8 @@
 # Mac setup and diagnostic checklist
 
 ## Run
-The repository is private, so the Mac needs your GitHub sign-in once. Either sign in with the GitHub CLI
-(`gh auth login`, then `gh repo clone MohammadAbwini98/Cartoon ~/RemakeStudio/Cartoon`), or clone over HTTPS and
-let macOS Keychain store the credential git asks for:
+The repository is currently public, so cloning needs no GitHub sign-in. (If you make it private later,
+sign in once with `gh auth login`, or let macOS Keychain store the credential git asks for.)
 ```bash
 git clone https://github.com/MohammadAbwini98/Cartoon.git ~/RemakeStudio/Cartoon
 ```
