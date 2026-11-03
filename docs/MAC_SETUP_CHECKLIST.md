@@ -1,11 +1,14 @@
 # Mac setup and diagnostic checklist
 
 ## Run
+The repository is private, so the Mac needs your GitHub sign-in once. Either sign in with the GitHub CLI
+(`gh auth login`, then `gh repo clone MohammadAbwini98/Cartoon ~/RemakeStudio/Cartoon`), or clone over HTTPS and
+let macOS Keychain store the credential git asks for:
 ```bash
-git clone https://github.com/MohammadAbwini98/animation-remake-studio.git ~/RemakeStudio/repo
+git clone https://github.com/MohammadAbwini98/Cartoon.git ~/RemakeStudio/Cartoon
 ```
 ```bash
-cd ~/RemakeStudio/repo
+cd ~/RemakeStudio/Cartoon
 ```
 ```bash
 sh infra/mac-worker/setup.sh --queue-endpoint https://<account-id>.r2.cloudflarestorage.com --queue-bucket remake-queue

@@ -1,5 +1,6 @@
 #!/bin/sh
 # Remake Studio Mac worker: one-command user-level setup (no sudo).
+# Repository: https://github.com/MohammadAbwini98/Cartoon (clone to ~/RemakeStudio/Cartoon)
 #
 #   sh infra/mac-worker/setup.sh --queue-endpoint https://<account-id>.r2.cloudflarestorage.com \
 #                                --queue-bucket remake-queue [--reuse-comfyui ~/ComfyUI] [--models-from ~/ComfyUI/models]

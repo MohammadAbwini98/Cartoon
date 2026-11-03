@@ -49,7 +49,7 @@ alternative was rejected.
 
 ## Setting up the Mac (owner's action)
 
-1. Clone the project on the Mac and run `sh infra/mac-worker/install.sh` (no sudo). It creates
+1. Clone `https://github.com/MohammadAbwini98/Cartoon` on the Mac and run `sh infra/mac-worker/setup.sh` (no sudo; see docs/MAC_SETUP_CHECKLIST.md). It creates
    `~/.remake-worker/` with a new job-signing key, config and an empty secrets file, and a LaunchAgent.
 2. Create a private bucket (Cloudflare R2 suggested) and one API token limited to that bucket. Put its keys in
    `~/.remake-worker/secrets.json` and the endpoint/bucket in `~/.remake-worker/config.json`.
