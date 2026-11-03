@@ -1,4 +1,4 @@
-# Status — 2026-11-02
+# Status — 2026-11-03
 
 Milestone being built toward: a cloud system that receives the episode MP4, analyses it, generates a
 redesigned short scene, keeps the original Arabic audio and returns a downloadable result.
@@ -17,6 +17,25 @@ redesigned short scene, keeps the original Arabic audio and returns a downloadab
 | Pilot graph (`workflows.py`) | Generated graph passes a static check against node schemas read from source at the pinned commits; checker catches renamed nodes, bad choices, missing inputs, bad output slots |
 | Shot assembly (`assemble.py`) | 48 generated frames → 23.976 fps MP4, frame-exact, upscaled to 512×288, original audio aligned within 12 ms; wrong frame count refused; side-by-side evidence video |
 | GPU worker pins (`infra/comfyui/`) | Dockerfile, lock file and node schemas reference identical commits; all model URLs pin a Hugging Face commit with size and SHA-256 from the HF API; fetcher verifies and refuses corrupt or unpinned files |
+
+## Hybrid rendering (Mac M3 Pro + cloud) — built and tested here; **not yet operational**
+
+Not operational until: the worker is installed on the Mac, the shared bucket and keys exist, and the MPS
+benchmark (docs/MPS_COMPATIBILITY.md) has produced evidence. No Mac or GPU has run any of it yet.
+
+| Component | Verified here |
+|---|---|
+| Worker (`hybrid/worker.py`) as a real process against a ComfyUI stand-in process | signed job end to end through the common Runner; memory sampled (process RSS + `/system_stats`), s/frame, effective fps; tampered signature and non-template node rejected before reaching ComfyUI; cancel interrupts the running prompt; worker killed mid-job and restarted collects the same prompt (1 render); ComfyUI killed and restarted with empty history → one resubmit, success; "MPS backend out of memory" classified `oom`; live lease respected, expired lease recovered; public ComfyUI URL and world-readable key refused |
+| Offline Mac | job created while no worker runs stays queued with state persisted; completes when the worker appears |
+| Transport | SigV4 signer reproduces the AWS documentation signature; S3 transport passes its self-test (incl. conditional writes) against a bucket stand-in; local store self-test |
+| Scheduler | 8 routing tests: CPU tasks; untested MPS never assumed; benchmark Mac-only and queued when offline; validated → Mac; offline → wait or authorized fallback; frame/size/memory limits; quality confirmation required |
+| Benchmark | staged plan (1 → 6 → 48 → 96 frames), temporal metrics, evidence recording (only success within 14.4 GB validates) |
+| MPS workflow variants | pass node schemas and template allowlists; DWPose on ONNX |
+| Mac installer | dry run in a scratch home: files created mode 600, key kept on rerun, LaunchAgent plist parses |
+| Production view | new section on the studio page renders workers, jobs, MPS evidence, budget (browser test); first snapshot published |
+
+Not verified: anything on macOS (MPS, `caffeinate`, `sysctl`, `launchctl`), a real ComfyUI, a real bucket,
+and every benchmark number. The memory figures in tests come from the stand-in process.
 
 ## Implemented, not yet tested for real
 
@@ -49,6 +68,12 @@ redesigned short scene, keeps the original Arabic audio and returns a downloadab
    sources entered in `config/pricing.toml`.
 4. **Spending authorization**: total cap, per-job cap, providers, scope and expiry, recorded in
    `state/authorization.json` from your message. Without it, every paid job stops at `blocked`.
+
+## Owner actions for hybrid rendering
+1. Create a private S3-compatible bucket (Cloudflare R2 suggested) and two tokens limited to it (Mac, cloud).
+2. On the Mac: `sh infra/mac-worker/install.sh`, fill `~/.remake-worker/secrets.json`, set up ComfyUI with the
+   pinned node packs and models, run `--selftest`, then load the LaunchAgent (docs/HYBRID_RENDERING.md).
+3. Cloud environment secrets: `REMAKE_STORE_ACCESS_KEY`, `REMAKE_STORE_SECRET_KEY`, `REMAKE_JOB_SIGNING_KEY`.
 
 ## Next execution step
 

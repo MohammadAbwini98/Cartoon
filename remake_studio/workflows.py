@@ -120,3 +120,31 @@ def check_graph(graph: dict, schemas_path: str = SCHEMAS) -> list[str]:
             elif k in s.get("choices", {}) and v not in s["choices"][k]:
                 problems.append(f"{nid}.{k}: {v!r} not one of {s['choices'][k]}")
     return problems
+
+
+# ----------------------------------------------------------------- variants
+# MPS variant, from the compatibility audit (docs/MPS_COMPATIBILITY.md): DWPose
+# uses the ONNX detector and estimator (run by onnxruntime on CPU/CoreML) instead
+# of the torchscript ones, which would run on the MPS device unvalidated; the
+# default size and context window are chosen for 18 GB of unified memory and
+# must be confirmed by the benchmark before production use.
+MPS_DEFAULTS = {"width": 512, "height": 288, "context_length": 16, "context_overlap": 4}
+
+
+def variant_graph(p: PilotParams, variant: str, template: str = "pilot_shot_v1") -> dict:
+    if variant not in ("mps", "cuda"):
+        raise ValueError(f"unknown variant {variant}")
+    g = pilot_shot_graph(p)
+    if variant == "mps":
+        g["4"]["inputs"].update(bbox_detector="yolox_l.onnx", pose_estimator="dw-ll_ucoco_384.onnx")
+    if template == "keyframes_v1":
+        # per-frame redesign without the motion module: the sampler takes the IPAdapter model directly
+        del g["8"], g["9"]
+        g["17"]["inputs"]["model"] = ["7", 0]
+    elif template != "pilot_shot_v1":
+        raise ValueError(f"unknown template {template}")
+    return g
+
+
+def mps_params(**kw) -> PilotParams:
+    return PilotParams(**{**MPS_DEFAULTS, **kw})

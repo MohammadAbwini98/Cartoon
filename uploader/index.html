@@ -170,6 +170,17 @@ details summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
     <div class="table-wrap" id="listWrap"><p class="empty">Nothing uploaded yet. Files you send appear here with their checksums, and the studio picks them up from this list.</p></div>
   </section>
 
+  <section class="panel" aria-labelledby="h-prod">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="h-prod">Production</h2>
+      <span class="num" id="prodAge" style="font-size:.85rem;color:var(--muted)">No snapshot yet</span>
+    </div>
+    <div class="status" id="prodWorkers"><span class="chip">Render workers appear here once the orchestrator publishes a snapshot.</span></div>
+    <div class="table-wrap" id="prodJobs"><p class="empty">Render jobs from every backend (Mac, cloud GPU, API, CPU) are listed here with their state, speed and memory use.</p></div>
+    <div class="table-wrap" id="prodCompat"></div>
+    <p class="num" id="prodBudget" style="font-size:.85rem;color:var(--muted)"></p>
+  </section>
+
   <details class="panel"><summary>Activity log</summary><pre id="log"></pre></details>
 </div>
 
@@ -213,7 +224,58 @@ details summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
     chip(!!db, "Resume records ready", "Resume records unavailable");
     if (!assets) { $("storeText").textContent = "Only the owner or an editor of this page can upload."; return; }
     await refreshUsage();
-    if (db) watchTransfers();
+    if (db) { watchTransfers(); try { watchProduction(); } catch (e) { log(`production view unavailable: ${e.message || e}`); } }
+  }
+
+  // ---------- production snapshot (written by the orchestrator)
+  function table(head, rows) {
+    const t = document.createElement("table");
+    const tr = document.createElement("tr");
+    head.forEach((h) => { const th = document.createElement("th"); th.textContent = h; tr.append(th); });
+    const th = document.createElement("thead"); th.append(tr); t.append(th);
+    const tb = document.createElement("tbody");
+    for (const r of rows) {
+      const row = document.createElement("tr");
+      r.forEach((v, i) => {
+        const td = document.createElement("td");
+        if (v && typeof v === "object" && v.pill) { const p = document.createElement("span"); p.className = "pill " + v.cls; p.textContent = v.pill; td.append(p); }
+        else { td.textContent = v ?? "—"; if (i > 1) td.className = "num"; }
+        row.append(td);
+      });
+      tb.append(row);
+    }
+    t.append(tb); return t;
+  }
+  const pillFor = (s) => ({ pill: s, cls: /validated|succeeded/.test(s) ? "complete" : /failed|rejected|blocked/.test(s) ? "failed" : "uploading" });
+  function watchProduction() {
+    db.doc("production/current").onSnapshot((d) => {
+      if (!d.exists) return;
+      const s = d.data().snapshot || {};
+      const age = d.data().generated ? Math.round((Date.now() / 1000 - d.data().generated) / 60) : null;
+      $("prodAge").textContent = age === null ? "" : `snapshot ${age} min old`;
+      const w = $("prodWorkers"); w.replaceChildren();
+      for (const x of s.workers || []) {
+        const c = document.createElement("span");
+        c.className = "chip " + (x.online ? "ok" : "bad");
+        const hw = x.hardware ? ` · ${x.hardware.chip || ""} ${x.hardware.memory_bytes ? Math.round(x.hardware.memory_bytes / 1073741824) + " GB" : ""}` : "";
+        c.textContent = `${x.id}: ${x.online ? "online" : "offline"}${x.busy ? " · busy" : ""}${hw}${x.note ? " · " + x.note : ""}`;
+        w.append(c);
+      }
+      const jobs = s.jobs || [];
+      $("prodJobs").replaceChildren(jobs.length ? table(["Job", "Backend", "State", "Phase", "s / frame", "Peak memory"],
+        jobs.map((j) => [j.shot || j.id.slice(0, 12), j.backend, pillFor(j.state), j.phase || j.reason || "",
+          j.metrics?.sec_per_frame ?? "", j.metrics ? `${Math.max(j.metrics.peak_system_used_mb || 0, j.metrics.peak_comfyui_rss_mb || 0)} MB` : ""]))
+        : Object.assign(document.createElement("p"), { className: "empty", textContent: "No render jobs yet." }));
+      const compat = Object.entries(s.compat || {});
+      $("prodCompat").replaceChildren(compat.length ? table(["Workflow on MPS", "Evidence", "Peak GB", "s / frame", "Frames tested", "Quality"],
+        compat.map(([k, c]) => [k, pillFor(c.status), c.peak_memory_gb ?? "", c.sec_per_frame ?? "", c.max_frames_tested ?? "",
+          c.quality_equivalent === true ? "equivalent" : c.quality_equivalent === false ? "not equivalent" : "not reviewed"]))
+        : Object.assign(document.createElement("p"), { className: "empty", textContent: "No MPS benchmark evidence yet: Mac renders stay disabled until the benchmark validates them." }));
+      const b = s.budget || {};
+      $("prodBudget").textContent = b.authorization
+        ? `Paid compute: ${b.ledger?.committed ?? 0} of ${b.authorization.total_cap} ${b.authorization.currency} committed (${(b.authorization.providers || []).join(", ")}), expires ${b.authorization.expires}`
+        : "Paid compute: no budget authorized; paid backends are off.";
+    }, (err) => log(`production snapshot unavailable: ${err.code}`));
   }
 
   async function refreshUsage() {

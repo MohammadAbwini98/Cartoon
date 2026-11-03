@@ -5,6 +5,8 @@
   remake providers [--discover]                       configured backends (keys from env)
   remake budget                                       spending authorization and ledger totals
   remake jobs                                         generation jobs and their states
+  remake hybrid status [--json FILE]                  workers, jobs on every backend, MPS evidence, budget
+  remake hybrid decide TEMPLATE FRAMES WxH [--benchmark] [--fallback]   where a render would run, and why
 """
 from __future__ import annotations
 
@@ -53,6 +55,32 @@ def main(argv=None):
             print(f"{j['id']}  {j['provider']:10s} {j['state']:15s} shot={j.get('shot')} "
                   f"attempts={len(j['attempts'])} {j.get('blocked_reason') or j.get('last_error') or ''}")
         return 0
+    if cmd == "hybrid":
+        from remake_studio.hybrid import dashboard
+        from remake_studio.hybrid.scheduler import Scheduler, Task
+        from remake_studio.providers import registry
+        from remake_studio.providers.budget import Budget
+        mac, note = dashboard.load_mac()
+        if rest and rest[0] == "status":
+            snap = dashboard.snapshot(STATE, mac, note)
+            if "--json" in rest:
+                with open(rest[rest.index("--json") + 1], "w") as f:
+                    json.dump(snap, f, indent=2)
+            for w in snap["workers"]:
+                print(f"worker {w['id']}: {'online' if w['online'] else 'offline'} {w.get('note') or ''}")
+            print(f"jobs: {len(snap['jobs'])}; MPS evidence: {list(snap['compat']) or 'none yet'}")
+            return 0
+        if rest and rest[0] == "decide":
+            w, h = map(int, rest[3].split("x"))
+            providers, _ = registry.build()
+            cloud = {k: v for k, v in providers.items() if k in ("runpod", "comfyui")}
+            apis = {k: v for k, v in providers.items() if k in ("fal", "replicate")}
+            s = Scheduler(STATE, mac, cloud, apis, Budget(STATE))
+            d = s.decide(Task("comfy_workflow", rest[1], int(rest[2]), w, h,
+                              purpose="benchmark" if "--benchmark" in rest else "production",
+                              allow_fallback="--fallback" in rest))
+            print(json.dumps(d.__dict__, indent=2))
+            return 0
     print(f"unknown command {cmd!r}\n{__doc__}", file=sys.stderr)
     return 2
 

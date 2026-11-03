@@ -40,7 +40,8 @@ const mock = (cfg) => {
   const qs = (c) => { const docs = Object.keys(st.docs).filter((k) => k.startsWith(c + "/") && k.split("/").length === c.split("/").length + 1).map(snap); return { docs, size: docs.length, empty: !docs.length, metadata: {} }; };
   const db = {
     doc: (p) => ({ get: async () => snap(p), set: async (d) => { st.docs[p] = structuredClone(d); notify(); },
-                   update: async (d) => { if (!(p in st.docs)) throw err("invalid_argument"); Object.assign(st.docs[p], structuredClone(d)); notify(); } }),
+                   update: async (d) => { if (!(p in st.docs)) throw err("invalid_argument"); Object.assign(st.docs[p], structuredClone(d)); notify(); },
+                   onSnapshot: (cb) => { st.docListeners = st.docListeners || []; st.docListeners.push([p, cb]); cb(snap(p)); return () => {}; } }),
     collection: (c) => ({ get: async () => qs(c), onSnapshot: (cb) => { st.listeners.push([c, cb]); cb(qs(c)); return () => {}; } }),
   };
   window.claude = { use: async (n) => (n === "assets" ? assets : n === "db" ? db : null) };
@@ -152,7 +153,28 @@ const ok = (s) => console.log(`ok ${++passed} - ${s}`);
     await ctx.close();
   }
 
-  // 4. outside claude.ai: no window.claude -> clear message, upload disabled
+  // 4. production snapshot renders workers, jobs, MPS evidence and budget
+  {
+    const { ctx, page } = await open(browser, {});
+    step("4: production", page);
+    await page.evaluate(() => {
+      const st = window.__mock;
+      st.docs["production/current"] = { generated: Date.now() / 1000, snapshot: {
+        workers: [{ id: "mac-m3pro", online: true, hardware: { chip: "Apple M3 Pro", memory_bytes: 19327352832 } }],
+        jobs: [{ id: "j_abc", shot: "0007", backend: "mac", state: "validated", phase: "done", metrics: { sec_per_frame: 9.4, peak_system_used_mb: 11800 } }],
+        compat: { "pilot_shot_v1/mps": { status: "validated", peak_memory_gb: 11.5, sec_per_frame: 9.4, max_frames_tested: 48, quality_equivalent: null } },
+        budget: { authorization: null } } };
+      for (const [p, cb] of st.docListeners || []) cb({ id: "current", exists: true, data: () => st.docs[p], metadata: {} });
+    });
+    await page.waitForFunction(() => /Apple M3 Pro/.test(document.getElementById("prodWorkers").textContent));
+    const txt = await page.locator("#prodJobs").textContent() + await page.locator("#prodCompat").textContent();
+    for (const needle of ["0007", "validated", "9.4", "11800 MB", "pilot_shot_v1/mps", "not reviewed"]) if (!txt.includes(needle)) throw new Error("missing " + needle);
+    if (!/no budget authorized/.test(await page.locator("#prodBudget").textContent())) throw new Error("budget line");
+    ok("production section renders workers, jobs, MPS evidence and budget");
+    await ctx.close();
+  }
+
+  // 5. outside claude.ai: no window.claude -> clear message, upload disabled
   {
     const ctx = await browser.newContext(); const page = await ctx.newPage();
     await page.goto("file://" + page_html);

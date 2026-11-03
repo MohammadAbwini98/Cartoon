@@ -1,0 +1,14 @@
+# Shared job store between the cloud orchestrator and the Mac worker.
+# Any S3-compatible bucket works; Cloudflare R2 is the suggested default.
+# Keys come from environment secrets, never from this file.
+worker_id = "mac-m3pro"
+signing_key_env = "REMAKE_JOB_SIGNING_KEY"      # the same value as ~/.remake-worker/job-signing.key on the Mac
+heartbeat_max_age_s = 120
+
+[transport]
+type = "s3"
+endpoint = "https://<account-id>.r2.cloudflarestorage.com"
+bucket = "remake-studio-queue"
+region = "auto"
+access_key_env = "REMAKE_STORE_ACCESS_KEY"
+secret_key_env = "REMAKE_STORE_SECRET_KEY"

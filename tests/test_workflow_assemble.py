@@ -97,3 +97,18 @@ class Assemble(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Variants(unittest.TestCase):
+    def test_mps_and_keyframe_variants_pass_schema_and_template_allowlists(self):
+        from remake_studio.hybrid import protocol as P
+        from remake_studio.workflows import mps_params, variant_graph
+        for template in ("pilot_shot_v1", "keyframes_v1"):
+            g = variant_graph(mps_params(control_video="shot.mp4", reference_image="ref.png", frames=6), "mps", template)
+            self.assertEqual(check_graph(g), [], template)
+            self.assertTrue({n["class_type"] for n in g.values()} <= P.TEMPLATES[template]["nodes"], template)
+            self.assertTrue(g["4"]["inputs"]["pose_estimator"].endswith(".onnx"))
+            self.assertEqual((g["16"]["inputs"]["width"], g["16"]["inputs"]["height"]), (512, 288))
+        kf = variant_graph(mps_params(control_video="s.mp4", reference_image="r.png", frames=6), "mps", "keyframes_v1")
+        self.assertNotIn("9", kf)
+        self.assertEqual(kf["17"]["inputs"]["model"], ["7", 0])

@@ -1,0 +1,20 @@
+{
+  "worker_id": "mac-m3pro",
+  "comfyui_url": "http://127.0.0.1:8188",
+  "comfyui_process_match": "main.py",
+  "transport": {
+    "type": "s3",
+    "endpoint": "https://<account-id>.r2.cloudflarestorage.com",
+    "bucket": "remake-studio-queue",
+    "region": "auto",
+    "access_key_env": "REMAKE_STORE_ACCESS_KEY",
+    "secret_key_env": "REMAKE_STORE_SECRET_KEY"
+  },
+  "secrets_file": "__HOME__/.remake-worker/secrets.json",
+  "signing_key_file": "__HOME__/.remake-worker/job-signing.key",
+  "allowed_templates": ["smoke_v1", "keyframes_v1", "pilot_shot_v1"],
+  "state_dir": "__HOME__/.remake-worker/state",
+  "poll_seconds": 15,
+  "lease_seconds": 180,
+  "memory_sample_seconds": 1
+}

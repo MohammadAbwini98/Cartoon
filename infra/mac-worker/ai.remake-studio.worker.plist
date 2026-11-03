@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>ai.remake-studio.worker</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__PY__</string><string>-m</string><string>remake_studio.hybrid.worker</string>
+    <string>--config</string><string>__HOME__/.remake-worker/config.json</string>
+  </array>
+  <key>WorkingDirectory</key><string>__REPO__</string>
+  <key>EnvironmentVariables</key><dict><key>PYTHONPATH</key><string>__REPO__</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ProcessType</key><string>Background</string>
+  <key>StandardOutPath</key><string>__HOME__/.remake-worker/worker.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/.remake-worker/worker.log</string>
+</dict>
+</plist>
